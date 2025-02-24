@@ -88,6 +88,14 @@ void video_cleanup(void) {
 void video_update_palette(uint8_t index, uint8_t value) {
     // In a real Pacman emulator, this would handle palette updates
     // For simplicity, we're using a fixed palette in this example
+    uint32_t *palette = memory_get_palette();
+    if (palette) {
+        // Use standard RGB color for palette entry
+        uint8_t r = ((value & 0x4) ? 0xFF : 0);  // Red (bit 2)
+        uint8_t g = ((value & 0x2) ? 0xFF : 0);  // Green (bit 1)
+        uint8_t b = ((value & 0x1) ? 0xFF : 0);  // Blue (bit 0)
+        palette[index] = 0xFF000000 | (r << 16) | (g << 8) | b;
+    }
 }
 
 // Enable/disable debug visualization

@@ -108,6 +108,9 @@ bool memory_init(const char *rom_path) {
     sprites = (uint8_t *)malloc(64 * 16); // 64 sprites, 16 bytes per sprite
     palette = (uint32_t *)malloc(256 * sizeof(uint32_t)); // 256 colors
     
+    // Initialize memory to prevent uninitialized access
+    if (rom) memset(rom, 0, ROM_SIZE);
+    
     if (!rom || !ram || !vram || !cram || !charset || !sprites || !palette) {
         fprintf(stderr, "Failed to allocate memory\n");
         memory_cleanup();
@@ -131,7 +134,7 @@ bool memory_init(const char *rom_path) {
     memset(sprites, 0, 64 * 16);
     
     // Initialize palette with default colors
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < 256; i++) {
         palette[i] = 0xFF000000 | // Alpha
                     ((i & 4) ? 0xFF0000 : 0) | // Red
                     ((i & 2) ? 0x00FF00 : 0) | // Green
