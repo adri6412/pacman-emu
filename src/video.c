@@ -308,6 +308,21 @@ void video_render(void) {
         debug_log("  CRAM[%d] = 0x%02X", i, cram[i]);
     }
     
+    // Check if VRAM is all zeros - if so, draw a test pattern instead
+    bool vram_empty = true;
+    for (int i = 0; i < VRAM_SIZE; i++) {
+        if (vram[i] != 0) {
+            vram_empty = false;
+            break;
+        }
+    }
+    
+    if (vram_empty) {
+        debug_log("VRAM is all zeros, drawing test pattern instead");
+        draw_test_pattern();
+        return;
+    }
+    
     // Check if screen is flipped (temporarily disabled for debugging)
     bool flip = false; // memory_get_flip_screen() != 0;
     

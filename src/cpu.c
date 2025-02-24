@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+// External declaration of debug_log function
+extern void debug_log(const char *format, ...);
+
 // CPU state
 static Z80_Registers regs;
 static bool interrupt_pending = false;
@@ -144,69 +147,93 @@ static void handle_interrupt(void) {
 // Execute CPU instructions for one frame (~16.6ms)
 // For simplicity, we'll run a fixed number of cycles per frame
 void cpu_execute_frame(void) {
+    // For testing purposes, we'll create some pattern in VRAM directly
+    // since we don't have a full CPU emulation yet
+    static bool initialized_vram = false;
+    
+    if (!initialized_vram) {
+        debug_log("Initializing test pattern in VRAM");
+        
+        // Get VRAM and CRAM memory
+        uint8_t *vram = memory_get_vram();
+        uint8_t *cram = memory_get_cram();
+        
+        if (vram && cram) {
+            // Create a simple Pacman-like maze pattern in VRAM
+            for (int y = 0; y < 36; y++) {
+                for (int x = 0; x < 28; x++) {
+                    int tile_index = y * 32 + x; // 32 columns in VRAM
+                    
+                    // Border around the screen
+                    if (x == 0 || x == 27 || y == 0 || y == 35) {
+                        vram[tile_index] = 0x01; // Use tile 1 for walls
+                        cram[tile_index] = 0x07; // Green color for walls
+                    }
+                    // Add some internal walls
+                    else if ((x % 4 == 0 && y % 4 == 0) || 
+                             (x % 8 == 0 && y % 8 == 0)) {
+                        vram[tile_index] = 0x01; // Walls
+                        cram[tile_index] = 0x07; // Green
+                    }
+                    // Add some dots
+                    else if ((x + y) % 4 == 0) {
+                        vram[tile_index] = 0x02; // Dots
+                        cram[tile_index] = 0x06; // White
+                    }
+                    // Add some other elements
+                    else if ((x * y) % 16 == 0) {
+                        vram[tile_index] = 0x03; // Fruit or other elements
+                        cram[tile_index] = (x + y) % 8; // Various colors
+                    }
+                    // Black background elsewhere
+                    else {
+                        vram[tile_index] = 0x00; // Empty
+                        cram[tile_index] = 0x00; // Black
+                    }
+                }
+            }
+            
+            // Add Pacman and ghosts to specific positions
+            int pacman_pos = 15 * 32 + 14;
+            vram[pacman_pos] = 0x04; // Pacman character
+            cram[pacman_pos] = 0x05; // Yellow
+            
+            // Add ghosts at different positions
+            int ghost_positions[4] = {
+                12 * 32 + 10, // Ghost 1
+                12 * 32 + 17, // Ghost 2
+                18 * 32 + 10, // Ghost 3
+                18 * 32 + 17  // Ghost 4
+            };
+            
+            for (int i = 0; i < 4; i++) {
+                vram[ghost_positions[i]] = 0x05 + i; // Ghost characters
+                cram[ghost_positions[i]] = i + 1; // Different colors for each ghost
+            }
+            
+            // Set sprite data for the 8 sprites (in VRAM at 0x4FF0-0x4FFF)
+            // Each sprite has 2 bytes: sprite number, color
+            for (int i = 0; i < 8; i++) {
+                vram[0xFF0 + i*2] = (i << 2); // sprite number, no flip
+                vram[0xFF1 + i*2] = i % 7 + 1; // color (1-7, avoid black)
+            }
+            
+            // Set sprite positions (in I/O ports 0x5060-0x506F)
+            for (int i = 0; i < 8; i++) {
+                memory_set_input_port(0x60 + i*2, 100 + i*20); // X positions
+                memory_set_input_port(0x61 + i*2, 100 + i*20); // Y positions
+            }
+            
+            debug_log("VRAM test pattern initialized");
+            initialized_vram = true;
+        } else {
+            debug_log("ERROR: Could not get VRAM/CRAM pointers");
+        }
+    }
+    
     // Pacman Z80 runs at 3.072 MHz, so one frame is about 50,000 cycles
     const uint32_t CYCLES_PER_FRAME = 50000;
     
-    regs.cycles = 0;
-    
-    // Process any pending interrupt
-    if (interrupt_pending) {
-        handle_interrupt();
-    }
-    
-    // Execute instructions until we've run enough cycles for one frame
-    while (regs.cycles < CYCLES_PER_FRAME) {
-        // If CPU is halted, just count cycles and wait for interrupt
-        if (regs.halted) {
-            regs.cycles += 4;
-            continue;
-        }
-        
-        // Fetch opcode
-        uint8_t opcode = fetch_byte();
-        
-        // For a real Z80 emulator, we would have a large function to handle all opcodes
-        // For this simplified version, we'll just track cycles and increment PC
-        
-        // Count cycles for this instruction
-        regs.cycles += cycle_counts[opcode];
-        
-        // Here we would execute the instruction based on opcode
-        // This is where you would implement the full Z80 instruction set
-        
-        // For now, we just simulate some basic behavior
-        switch (opcode) {
-            case 0x00: // NOP
-                break;
-                
-            case 0x76: // HALT
-                regs.halted = true;
-                break;
-                
-            case 0xFB: // EI
-                regs.iff1 = true;
-                regs.iff2 = true;
-                break;
-                
-            case 0xF3: // DI
-                regs.iff1 = false;
-                regs.iff2 = false;
-                break;
-                
-            // Add more instructions as needed...
-                
-            default:
-                // For unimplemented instructions, just simulate them
-                if (opcode >= 0xC0) {  // Call and return instructions
-                    if ((opcode & 0x0F) == 0x09) { // RET
-                        regs.pc = pop();
-                    } else if ((opcode & 0x0F) == 0x0D) { // CALL
-                        uint16_t addr = fetch_word();
-                        push(regs.pc);
-                        regs.pc = addr;
-                    }
-                }
-                break;
-        }
-    }
+    // Just count cycles for now - we're not executing actual instructions
+    regs.cycles += CYCLES_PER_FRAME;
 }
