@@ -35,6 +35,18 @@ void print_usage(const char *program_name) {
 }
 
 int main(int argc, char *argv[]) {
+    // Enable console output for Windows
+    #ifdef _WIN32
+    // Redirect console output to terminal
+    AllocConsole();
+    freopen("CONOUT$", "w", stdout);
+    freopen("CONOUT$", "w", stderr);
+    #endif
+    
+    // Initialize debug logging
+    debug_log("Pacman Emulator starting up");
+    debug_log("Command line: %s", argv[0]);
+    
     // Default settings
     const char *rom_path = NULL;
     bool use_test_rom = false;

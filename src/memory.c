@@ -5,6 +5,41 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <stdarg.h>  // For va_list, va_start, va_end
+
+// Debug log file
+static FILE *debug_file = NULL;
+
+// Initialize debug log
+static void init_debug_log(void) {
+    if (debug_file == NULL) {
+        debug_file = fopen("debug.log", "w");
+        if (debug_file) {
+            fprintf(debug_file, "=== Pacman Emulator Debug Log ===\n");
+            fflush(debug_file);
+        }
+    }
+}
+
+// Write to debug log
+void debug_log(const char *format, ...) {
+    init_debug_log();
+    
+    if (debug_file) {
+        va_list args;
+        va_start(args, format);
+        vfprintf(debug_file, format, args);
+        fprintf(debug_file, "\n");
+        fflush(debug_file);
+        va_end(args);
+        
+        // Also print to stdout for immediate feedback
+        va_start(args, format);
+        vprintf(format, args);
+        printf("\n");
+        va_end(args);
+    }
+}
 
 #ifdef _WIN32
     #include <direct.h>
@@ -51,26 +86,47 @@ static const MameRomSet pacman_roms = {
 
 // Load a single ROM file
 static bool load_rom_file(const char *filepath, uint8_t *buffer, size_t size) {
-    FILE *file = fopen(filepath, "rb");
-    if (!file) {
-        fprintf(stderr, "Failed to open ROM file: %s\n", filepath);
+    debug_log("Opening ROM file: %s", filepath);
+    
+    if (!buffer) {
+        debug_log("ERROR: NULL buffer in load_rom_file for %s", filepath);
         return false;
     }
     
+    FILE *file = fopen(filepath, "rb");
+    if (!file) {
+        debug_log("ERROR: Failed to open ROM file: %s", filepath);
+        return false;
+    }
+    
+    // Get file size
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    debug_log("File size is %ld bytes, expecting %zu bytes", file_size, size);
+    
     size_t read_size = fread(buffer, 1, size, file);
+    debug_log("Read %zu bytes from file", read_size);
+    
     fclose(file);
     
     if (read_size == 0) {
-        fprintf(stderr, "Failed to read ROM file: %s\n", filepath);
+        debug_log("ERROR: Failed to read ROM file (0 bytes read): %s", filepath);
         return false;
     }
     
     if (read_size < size) {
-        fprintf(stderr, "ROM file size mismatch: %s - expected %zu bytes, read %zu bytes\n", 
+        debug_log("WARNING: ROM file size mismatch: %s - expected %zu bytes, read %zu bytes", 
                 filepath, size, read_size);
         // Pad with 0xFF (RST 38h opcode)
         memset(buffer + read_size, 0xFF, size - read_size);
-        printf("ROM padded to full size with 0xFF bytes\n");
+        debug_log("ROM padded to full size with 0xFF bytes");
+    }
+    
+    // Dump first 16 bytes for verification
+    debug_log("First 16 bytes of ROM data:");
+    for (int i = 0; i < 16 && i < read_size; i++) {
+        debug_log("  Byte %d: 0x%02X", i, buffer[i]);
     }
     
     return true;
@@ -78,15 +134,40 @@ static bool load_rom_file(const char *filepath, uint8_t *buffer, size_t size) {
 
 // Check if a file exists
 static bool file_exists(const char *filepath) {
-    if (!filepath) return false;
+    if (!filepath) {
+        debug_log("ERROR: NULL filepath in file_exists");
+        return false;
+    }
     
     FILE *file = fopen(filepath, "rb");
     if (file) {
         fclose(file);
-        printf("File exists: %s\n", filepath);
+        debug_log("File exists: %s", filepath);
         return true;
     }
-    printf("File NOT found: %s\n", filepath);
+    debug_log("File NOT found: %s", filepath);
+    
+    // Additional diagnostics
+    struct stat st;
+    if (stat(filepath, &st) == 0) {
+        debug_log("  But stat() says file exists with size: %ld bytes", (long)st.st_size);
+        if (S_ISDIR(st.st_mode)) {
+            debug_log("  WARNING: Path is a directory, not a file");
+        }
+    } else {
+        debug_log("  stat() confirms file does not exist");
+        #ifdef _WIN32
+        debug_log("  Current directory: %s", _getcwd(NULL, 0));
+        #else
+        char cwd[1024];
+        if (getcwd(cwd, sizeof(cwd)) != NULL) {
+            debug_log("  Current directory: %s", cwd);
+        } else {
+            debug_log("  ERROR: Unable to get current directory");
+        }
+        #endif
+    }
+    
     return false;
 }
 
@@ -263,14 +344,21 @@ bool memory_init_mame_set(const char *rom_dir) {
     char *path;
     bool success = true;
     
+    debug_log("===== Loading Pacman ROM set from: %s =====", rom_dir);
+    
     // Pacman program ROM 1
     path = build_path(rom_dir, pacman_roms.program1);
-    printf("Checking for ROM: %s\n", path);
+    debug_log("Checking for ROM: %s", path);
     if (file_exists(path)) {
-        printf("Loading ROM: %s\n", path);
+        debug_log("Loading ROM: %s", path);
         success &= load_rom_file(path, rom, ROM_PACMAN1);
+        if (success) {
+            debug_log("ROM 1 loaded successfully");
+        } else {
+            debug_log("ERROR: Failed to load ROM 1");
+        }
     } else {
-        fprintf(stderr, "Program ROM not found: %s\n", path);
+        debug_log("ERROR: Program ROM not found: %s", path);
         success = false;
     }
     free(path);
@@ -421,13 +509,36 @@ bool memory_init_mame_set(const char *rom_dir) {
 
 // Clean up memory
 void memory_cleanup(void) {
-    if (rom) free(rom);
-    if (ram) free(ram);
-    if (vram) free(vram);
-    if (cram) free(cram);
-    if (charset) free(charset);
-    if (sprites) free(sprites);
-    if (palette) free(palette);
+    debug_log("Cleaning up memory resources");
+    
+    if (rom) {
+        debug_log("Freeing ROM memory");
+        free(rom);
+    }
+    if (ram) {
+        debug_log("Freeing RAM memory");
+        free(ram);
+    }
+    if (vram) {
+        debug_log("Freeing VRAM memory");
+        free(vram);
+    }
+    if (cram) {
+        debug_log("Freeing CRAM memory");
+        free(cram);
+    }
+    if (charset) {
+        debug_log("Freeing charset memory");
+        free(charset);
+    }
+    if (sprites) {
+        debug_log("Freeing sprites memory");
+        free(sprites);
+    }
+    if (palette) {
+        debug_log("Freeing palette memory");
+        free(palette);
+    }
     
     rom = NULL;
     ram = NULL;
@@ -436,6 +547,13 @@ void memory_cleanup(void) {
     charset = NULL;
     sprites = NULL;
     palette = NULL;
+    
+    // Close debug log file if open
+    if (debug_file) {
+        debug_log("Closing debug log file");
+        fclose(debug_file);
+        debug_file = NULL;
+    }
 }
 
 // Reset memory to initial state

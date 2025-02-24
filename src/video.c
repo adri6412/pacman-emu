@@ -34,11 +34,19 @@ static void init_flip_table(void) {
 
 // Initialize video hardware
 bool video_init(SDL_Renderer *r, int scale_factor) {
+    debug_log("Initializing video hardware");
+    
     renderer = r;
     scale = scale_factor;
     
+    if (!renderer) {
+        debug_log("ERROR: NULL renderer passed to video_init");
+        return false;
+    }
+    
     // Initialize flip table
     init_flip_table();
+    debug_log("Bit flip table initialized");
     
     // Create screen texture
     screen_texture = SDL_CreateTexture(
@@ -50,22 +58,25 @@ bool video_init(SDL_Renderer *r, int scale_factor) {
     );
     
     if (!screen_texture) {
-        fprintf(stderr, "Failed to create screen texture: %s\n", SDL_GetError());
+        debug_log("ERROR: Failed to create screen texture: %s", SDL_GetError());
         return false;
     }
+    debug_log("Screen texture created successfully");
     
     // Create pixel buffer
     pixel_buffer = (uint32_t *)malloc(SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(uint32_t));
     if (!pixel_buffer) {
-        fprintf(stderr, "Failed to allocate pixel buffer\n");
+        debug_log("ERROR: Failed to allocate pixel buffer");
         SDL_DestroyTexture(screen_texture);
         screen_texture = NULL;
         return false;
     }
+    debug_log("Pixel buffer allocated successfully");
     
     // Clear pixel buffer
     memset(pixel_buffer, 0, SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(uint32_t));
     
+    debug_log("Video initialization complete");
     return true;
 }
 
