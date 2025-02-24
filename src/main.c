@@ -5,6 +5,7 @@
 #ifdef _WIN32
     #include <SDL2/SDL.h>
     #include <direct.h>
+    #include <windows.h>  // For AllocConsole
     #define PATH_SEPARATOR '\\'
     #define mkdir(dir, mode) _mkdir(dir)
 #else
@@ -17,6 +18,9 @@
 #include "../include/memory.h"
 #include "../include/video.h"
 #include "../include/input.h"
+
+// External declaration of debug_log function
+extern void debug_log(const char *format, ...);
 
 #define WINDOW_WIDTH 224
 #define WINDOW_HEIGHT 288

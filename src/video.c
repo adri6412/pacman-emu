@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+// External declaration of debug_log function
+extern void debug_log(const char *format, ...);
+
 // Video hardware state
 static SDL_Renderer *renderer = NULL;
 static SDL_Texture *screen_texture = NULL;
