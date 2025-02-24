@@ -22,8 +22,22 @@ CFLAGS = -Wall -Wextra -g -O2
 # SDL2 settings based on OS
 ifeq ($(detected_OS),Windows)
     # MinGW settings
-    CFLAGS += -I$(SDL2_DIR)/include -Dmain=SDL_main
-    LDFLAGS = -L$(SDL2_DIR)/lib -lmingw32 -lSDL2main -lSDL2 -mwindows
+    ifdef SDL_INCLUDE_PATH
+        CFLAGS += -I$(SDL_INCLUDE_PATH) -Dmain=SDL_main
+    else
+        CFLAGS += -I$(SDL2_DIR)/include -Dmain=SDL_main
+    endif
+    
+    # Check for different possible lib paths
+    ifneq (,$(wildcard $(SDL2_DIR)/lib/x64/SDL2.dll))
+        LDFLAGS = -L$(SDL2_DIR)/lib/x64 -lmingw32 -lSDL2main -lSDL2 -mwindows
+    else ifneq (,$(wildcard $(SDL2_DIR)/lib/SDL2.dll))
+        LDFLAGS = -L$(SDL2_DIR)/lib -lmingw32 -lSDL2main -lSDL2 -mwindows
+    else ifneq (,$(wildcard $(SDL2_DIR)/x86_64-w64-mingw32/lib/libSDL2.a))
+        LDFLAGS = -L$(SDL2_DIR)/x86_64-w64-mingw32/lib -lmingw32 -lSDL2main -lSDL2 -mwindows
+    else
+        LDFLAGS = -L$(SDL2_DIR)/lib -lmingw32 -lSDL2main -lSDL2 -mwindows
+    endif
 else
     # Linux/macOS settings
     LDFLAGS = -lSDL2
