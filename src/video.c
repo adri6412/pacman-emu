@@ -138,6 +138,10 @@ void video_update_palette(uint8_t index, uint8_t value) {
         
         // Store RGBA value (alpha = 0xFF)
         palette[index] = 0xFF000000 | (r << 16) | (g << 8) | b;
+        
+        debug_log("Updated palette[%d] = 0x%08X from value 0x%02X", index, palette[index], value);
+    } else {
+        debug_log("WARNING: Tried to update palette[%d] but palette is NULL", index);
     }
 }
 
@@ -277,6 +281,8 @@ static void get_sprite_data(int sprite_num, int *sprite_code, int *sprite_color,
 
 // Render the current frame (based on MAME implementation)
 void video_render(void) {
+    debug_log("Rendering frame");
+    
     // Clear screen to black
     memset(pixel_buffer, 0, SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(uint32_t));
     
@@ -285,10 +291,21 @@ void video_render(void) {
     uint8_t *cram = memory_get_cram();
     
     if (!vram || !cram) {
-        printf("WARNING: Video memory not initialized, rendering test pattern\n");
+        debug_log("WARNING: Video memory not initialized, rendering test pattern");
         // If video memory is not available, just draw a test pattern
         draw_test_pattern();
         return;
+    }
+    
+    // Debug - dump a small part of VRAM to see what's in there
+    debug_log("VRAM content sample (first 16 bytes):");
+    for (int i = 0; i < 16; i++) {
+        debug_log("  VRAM[%d] = 0x%02X", i, vram[i]);
+    }
+    
+    debug_log("CRAM content sample (first 16 bytes):");
+    for (int i = 0; i < 16; i++) {
+        debug_log("  CRAM[%d] = 0x%02X", i, cram[i]);
     }
     
     // Check if screen is flipped (temporarily disabled for debugging)

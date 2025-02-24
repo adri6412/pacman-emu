@@ -486,17 +486,34 @@ bool memory_init_mame_set(const char *rom_dir) {
     // Print final status
     printf("ROM loading %s\n", success ? "succeeded" : "failed");
     
-    // Initialize palette with some basic colors regardless
-    printf("Ensuring default colors are set\n");
+    // Initialize palette with standard Pacman colors since we're missing the palette PROM
+    debug_log("Setting up default Pacman colors since palette PROM is missing");
+    
+    // Standard Pacman colors (approximately)
+    const uint32_t pacman_colors[] = {
+        0xFF000000,  // Black (background)
+        0xFF0000FF,  // Red (ghosts)
+        0xFF00FFFF,  // Cyan (ghosts)
+        0xFFFF00FF,  // Pink (ghosts)
+        0xFFFF8000,  // Orange (ghosts)
+        0xFFFFFF00,  // Yellow (pacman)
+        0xFFFFFFFF,  // White (dots)
+        0xFF00FF00,  // Green (maze)
+        0xFF0080FF,  // Light blue
+        0xFFFFFF80,  // Light yellow
+        0xFF808080,  // Gray
+        0xFF804000,  // Brown
+        0xFFC0C0C0,  // Light gray
+        0xFF8080FF,  // Light purple
+        0xFF400080,  // Purple
+        0xFF80FF80   // Light green
+    };
+    
+    // Set all 32 palette entries (16 colors repeated)
     for (int i = 0; i < 32; i++) {
-        // Make sure we have some visible colors (might be overwritten by ROM loading)
-        uint8_t r = ((i & 1) ? 0xFF : 0);
-        uint8_t g = ((i & 2) ? 0xFF : 0);
-        uint8_t b = ((i & 4) ? 0xFF : 0);
-        
-        // Set the palette directly
         if (palette) {
-            palette[i] = 0xFF000000 | (r << 16) | (g << 8) | b;
+            palette[i] = pacman_colors[i % 16];
+            debug_log("Set palette[%d] = 0x%08X", i, palette[i]);
         }
     }
     
