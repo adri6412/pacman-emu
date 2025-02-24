@@ -7,6 +7,9 @@
 // External declaration of debug_log function
 extern void debug_log(const char *format, ...);
 
+// Draw a test pattern to show something when VRAM is not available
+static void draw_test_pattern(void);
+
 // Video hardware state
 static SDL_Renderer *renderer = NULL;
 static SDL_Texture *screen_texture = NULL;
@@ -363,6 +366,7 @@ void video_render(void) {
 }
 
 // Draw a test pattern to show something when VRAM is not available
+// NOTE: This function must be defined before it's used in video_render!
 static void draw_test_pattern(void) {
     // Draw a colored checkerboard pattern
     for (int y = 0; y < SCREEN_HEIGHT; y++) {
