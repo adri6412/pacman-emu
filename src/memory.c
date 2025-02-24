@@ -395,6 +395,40 @@ void memory_reset(void) {
     if (vram) memset(vram, 0, VRAM_SIZE);
     if (cram) memset(cram, 0, CRAM_SIZE);
     memset(io_ports, 0, sizeof(io_ports));
+    
+    // Initialize some values for testing
+    interrupt_enable = 1;  // Enable interrupts by default for testing
+    sound_enable = 1;      // Enable sound
+    flip_screen = 0;       // No screen flip
+    
+    // Set some default sprite values near the end of VRAM
+    if (vram && VRAM_SIZE >= 0x1000) {
+        // Set sprite 0 (Pacman)
+        vram[0xFF0] = 0 << 2;  // Sprite 0, no flip
+        vram[0xFF1] = 6;       // Yellow color
+        
+        // Set sprite 1 (Ghost 1)
+        vram[0xFF2] = 1 << 2;  // Sprite 1, no flip
+        vram[0xFF3] = 4;       // Red color
+        
+        // Set sprite 2 (Ghost 2)
+        vram[0xFF4] = 2 << 2;  // Sprite 2, no flip
+        vram[0xFF5] = 1;       // Blue color
+        
+        // Set sprite 3 (Ghost 3)
+        vram[0xFF6] = 3 << 2;  // Sprite 3, no flip
+        vram[0xFF7] = 2;       // Green color
+    }
+    
+    // Set default sprite positions in I/O ports
+    io_ports[0x60] = 100;      // Sprite 0 X
+    io_ports[0x61] = 100;      // Sprite 0 Y
+    io_ports[0x62] = 150;      // Sprite 1 X
+    io_ports[0x63] = 100;      // Sprite 1 Y
+    io_ports[0x64] = 100;      // Sprite 2 X
+    io_ports[0x65] = 150;      // Sprite 2 Y
+    io_ports[0x66] = 150;      // Sprite 3 X
+    io_ports[0x67] = 150;      // Sprite 3 Y
 }
 
 // Read a byte from memory (based on MAME pacman_map implementation)

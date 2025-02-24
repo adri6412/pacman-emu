@@ -209,6 +209,29 @@ static void get_sprite_data(int sprite_num, int *sprite_code, int *sprite_color,
     // Second byte: color
     uint8_t *ram = memory_get_vram(); // WorkRAM in our implementation
     
+    // For debugging, return hardcoded values if RAM is not initialized properly
+    if (!ram || sprite_num >= MAX_SPRITES) {
+        *sprite_code = sprite_num;
+        *sprite_color = 1;
+        *sprite_x = 100 + sprite_num * 20;
+        *sprite_y = 100;
+        *flip_x = false;
+        *flip_y = false;
+        return;
+    }
+    
+    // Check if we're near the end of VRAM (might be out of bounds)
+    if (VRAM_SIZE < 0xFF0 + (MAX_SPRITES * 2)) {
+        // Hardcoded values for safety
+        *sprite_code = sprite_num;
+        *sprite_color = 1;
+        *sprite_x = 100 + sprite_num * 20;
+        *sprite_y = 100;
+        *flip_x = false;
+        *flip_y = false;
+        return;
+    }
+    
     uint16_t sprites_offset = 0xFF0; // Offset in VRAM where sprite data is stored
     uint8_t sprite_attr1 = ram[sprites_offset + sprite_num * 2];
     uint8_t sprite_attr2 = ram[sprites_offset + sprite_num * 2 + 1];
@@ -222,9 +245,14 @@ static void get_sprite_data(int sprite_num, int *sprite_code, int *sprite_color,
     *sprite_color = sprite_attr2 & 0x3F;
     
     // Sprite coordinates come from I/O ports 0x5060-0x506F (x,y pairs for 8 sprites)
-    uint8_t port_offset = 0x60;  // Address 0x5060 in I/O space
-    *sprite_x = io_read_byte(port_offset + sprite_num * 2);
-    *sprite_y = 272 - io_read_byte(port_offset + sprite_num * 2 + 1); // Y is inverted
+    // For now use fixed values while we debug the port issues
+    *sprite_x = 100 + (sprite_num * 20);
+    *sprite_y = 100;
+    
+    // Original MAME-style code (commented for debugging)
+    // uint8_t port_offset = 0x60;  // Address 0x5060 in I/O space
+    // *sprite_x = io_read_byte(port_offset + sprite_num * 2);
+    // *sprite_y = 272 - io_read_byte(port_offset + sprite_num * 2 + 1); // Y is inverted
     
     // Adjust for hardware quirks - MAME subtracts 16 from sprite X position
     *sprite_x -= 16;
@@ -241,8 +269,8 @@ void video_render(void) {
     
     if (!vram || !cram) return;
     
-    // Check if screen is flipped
-    bool flip = memory_get_flip_screen() != 0;
+    // Check if screen is flipped (temporarily disabled for debugging)
+    bool flip = false; // memory_get_flip_screen() != 0;
     
     // Draw background tilemap (28x36 tiles)
     for (int ty = 0; ty < TILE_ROWS; ty++) {
