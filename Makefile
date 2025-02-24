@@ -2,8 +2,8 @@
 ifeq ($(OS),Windows_NT)
     detected_OS := Windows
     # Windows-specific settings
-    MKDIR_CMD = if not exist $(subst /,\,$1) mkdir $(subst /,\,$1)
-    RM_CMD = rmdir /s /q $(subst /,\,$1)
+    MKDIR_CMD = mkdir -p $1
+    RM_CMD = rm -rf $1
     EXE_EXT = .exe
     PATH_SEP = \\
 else
