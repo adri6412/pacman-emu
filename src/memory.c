@@ -552,10 +552,8 @@ uint8_t io_read_byte(uint8_t port) {
             // Game-specific switches
             return io_ports[port];
             
-        case (WATCHDOG & 0xFF): // Watchdog reset (0xC0) - same address as DSW2
-            // This is a write-only port on the real hardware, but some games
-            // try to read from it
-            return 0xFF;
+        // Note: Watchdog and DSW2 share the same address (0x50C0)
+        // We handle this by priority - DSW2 for reads, Watchdog for writes
             
         default:
             return io_ports[port];

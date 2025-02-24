@@ -26,6 +26,8 @@
 #define CRAM_END        0x47FF
 #define WRAM_START      0x4800  // 4800-4FFF Work RAM (Dream Shopper, Van Van Car use 4800-4BFF)
 #define WRAM_END        0x4FFF
+#define IO_START        0x5000  // IO port range start
+#define IO_END          0x50FF  // IO port range end
 #define IO_IN0          0x5000  // IN0 port
 #define IO_IN1          0x5040  // IN1 port
 #define IO_DSW1         0x5080  // DSW1 port
