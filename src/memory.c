@@ -1,4 +1,5 @@
 #include "../include/memory.h"
+#include "../include/video.h"  // Include video.h for video_update_palette
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
