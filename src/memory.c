@@ -77,11 +77,15 @@ static bool load_rom_file(const char *filepath, uint8_t *buffer, size_t size) {
 
 // Check if a file exists
 static bool file_exists(const char *filepath) {
+    if (!filepath) return false;
+    
     FILE *file = fopen(filepath, "rb");
     if (file) {
         fclose(file);
+        printf("File exists: %s\n", filepath);
         return true;
     }
+    printf("File NOT found: %s\n", filepath);
     return false;
 }
 
@@ -250,13 +254,17 @@ bool memory_init_mame_set(const char *rom_dir) {
         }
     }
     
+    printf("Loading ROMs from directory: %s\n", rom_dir);
+    
     // Load program ROMs
     char *path;
     bool success = true;
     
     // Pacman program ROM 1
     path = build_path(rom_dir, pacman_roms.program1);
+    printf("Checking for ROM: %s\n", path);
     if (file_exists(path)) {
+        printf("Loading ROM: %s\n", path);
         success &= load_rom_file(path, rom, ROM_PACMAN1);
     } else {
         fprintf(stderr, "Program ROM not found: %s\n", path);
@@ -266,7 +274,9 @@ bool memory_init_mame_set(const char *rom_dir) {
     
     // Pacman program ROM 2
     path = build_path(rom_dir, pacman_roms.program2);
+    printf("Checking for ROM: %s\n", path);
     if (file_exists(path)) {
+        printf("Loading ROM: %s\n", path);
         success &= load_rom_file(path, rom + ROM_PACMAN1, ROM_PACMAN2);
     } else {
         fprintf(stderr, "Program ROM not found: %s\n", path);
@@ -276,7 +286,9 @@ bool memory_init_mame_set(const char *rom_dir) {
     
     // Pacman program ROM 3
     path = build_path(rom_dir, pacman_roms.program3);
+    printf("Checking for ROM: %s\n", path);
     if (file_exists(path)) {
+        printf("Loading ROM: %s\n", path);
         success &= load_rom_file(path, rom + ROM_PACMAN1 + ROM_PACMAN2, ROM_PACMAN3);
     } else {
         fprintf(stderr, "Program ROM not found: %s\n", path);
@@ -286,7 +298,9 @@ bool memory_init_mame_set(const char *rom_dir) {
     
     // Pacman program ROM 4
     path = build_path(rom_dir, pacman_roms.program4);
+    printf("Checking for ROM: %s\n", path);
     if (file_exists(path)) {
+        printf("Loading ROM: %s\n", path);
         success &= load_rom_file(path, rom + ROM_PACMAN1 + ROM_PACMAN2 + ROM_PACMAN3, ROM_PACMAN4);
     } else {
         fprintf(stderr, "Program ROM not found: %s\n", path);
@@ -303,7 +317,9 @@ bool memory_init_mame_set(const char *rom_dir) {
     
     // Character ROM (gfx1)
     path = build_path(rom_dir, pacman_roms.gfx1);
+    printf("Checking for character ROM: %s\n", path);
     if (file_exists(path)) {
+        printf("Loading character ROM: %s\n", path);
         if (load_rom_file(path, temp_buffer, 0x1000)) {
             // Convert from MAME format to our format
             for (int i = 0; i < 256; i++) {
@@ -311,8 +327,10 @@ bool memory_init_mame_set(const char *rom_dir) {
                     charset[i * 8 + j] = temp_buffer[i * 16 + j];
                 }
             }
+            printf("Character ROM loaded successfully\n");
         } else {
             success = false;
+            printf("Failed to load character ROM\n");
         }
     } else {
         fprintf(stderr, "Graphics ROM not found: %s\n", path);
@@ -323,7 +341,9 @@ bool memory_init_mame_set(const char *rom_dir) {
     
     // Sprite ROM (gfx2)
     path = build_path(rom_dir, pacman_roms.gfx2);
+    printf("Checking for sprite ROM: %s\n", path);
     if (file_exists(path)) {
+        printf("Loading sprite ROM: %s\n", path);
         if (load_rom_file(path, temp_buffer, 0x1000)) {
             // Convert from MAME format to our format
             for (int i = 0; i < 64; i++) {
@@ -331,8 +351,10 @@ bool memory_init_mame_set(const char *rom_dir) {
                     sprites[i * 16 + j] = temp_buffer[i * 16 + j];
                 }
             }
+            printf("Sprite ROM loaded successfully\n");
         } else {
             success = false;
+            printf("Failed to load sprite ROM\n");
         }
     } else {
         fprintf(stderr, "Graphics ROM not found: %s\n", path);
@@ -346,7 +368,9 @@ bool memory_init_mame_set(const char *rom_dir) {
     // Load palette PROM
     uint8_t palette_prom[32];
     path = build_path(rom_dir, pacman_roms.palette);
+    printf("Checking for palette PROM: %s\n", path);
     if (file_exists(path)) {
+        printf("Loading palette PROM: %s\n", path);
         if (load_rom_file(path, palette_prom, 32)) {
             // Convert palette PROM to RGBA
             for (int i = 0; i < 32; i++) {
@@ -356,16 +380,32 @@ bool memory_init_mame_set(const char *rom_dir) {
                 uint8_t b = ((c >> 6) & 0x03) * 85; // 2 bits of blue
                 palette[i] = 0xFF000000 | (r << 16) | (g << 8) | b;
             }
+            printf("Palette PROM loaded successfully\n");
         } else {
             // Not fatal, we'll use default palette
-            printf("Using default color palette\n");
+            printf("Using default color palette (load failed)\n");
         }
     } else {
         fprintf(stderr, "Palette PROM not found: %s\n", path);
         // Not fatal, we'll use default palette
-        printf("Using default color palette\n");
+        printf("Using default color palette (file not found)\n");
     }
     free(path);
+    
+    // Print final status
+    printf("ROM loading %s\n", success ? "succeeded" : "failed");
+    
+    // Initialize palette with some basic colors regardless
+    printf("Ensuring default colors are set\n");
+    for (int i = 0; i < 32; i++) {
+        // Make sure we have some visible colors (might be overwritten by ROM loading)
+        uint8_t value = i % 8;  // Just ensure we have some variety
+        video_update_palette(i, value);
+    }
+    
+    // Always call memory_reset to set up default sprite positions and other state
+    printf("Initializing memory defaults\n");
+    memory_reset();
     
     return success;
 }
