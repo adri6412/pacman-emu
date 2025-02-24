@@ -28,21 +28,30 @@ static const uint8_t cycle_counts[256] = {
     5, 10, 10, 4, 10, 11, 7, 11, 5, 6, 10, 4, 10, 0, 7, 11
 };
 
-// CPU initialization
+// CPU initialization (based on MAME Z80 implementation)
 void cpu_init(void) {
     cpu_reset();
 }
 
-// Reset the CPU to initial state
+// Reset the CPU to initial state (based on MAME Z80 implementation)
 void cpu_reset(void) {
+    // Clear all registers
     memset(&regs, 0, sizeof(regs));
-    regs.pc = 0;         // Start at address 0 (ROM)
-    regs.sp = 0xF000;    // Initial stack pointer in RAM
-    regs.iff1 = false;
+    
+    // Standard Z80 reset state
+    regs.pc = 0;            // Start at address 0 (ROM)
+    regs.sp = 0xF000;       // Initial stack pointer in high RAM
+    regs.iff1 = false;      // Interrupts disabled
     regs.iff2 = false;
-    regs.im = 0;
-    regs.halted = false;
+    regs.im = 0;            // Interrupt mode 0
+    regs.i = 0;             // Interrupt register
+    regs.r = 0;             // Refresh register
+    regs.halted = false;    // Not halted
     regs.cycles = 0;
+    
+    // Initialize flags to known values (some games check for specific flag bits)
+    regs.f = FLAG_F3 | FLAG_F5; // Set undocumented flags
+    
     interrupt_pending = false;
 }
 

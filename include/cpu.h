@@ -61,13 +61,15 @@ typedef struct {
     uint32_t cycles;    // Cycle counter
 } Z80_Registers;
 
-// CPU Flag bits
-#define FLAG_C  0x01  // Carry
-#define FLAG_N  0x02  // Subtract
-#define FLAG_PV 0x04  // Parity/Overflow
-#define FLAG_H  0x10  // Half carry
-#define FLAG_Z  0x40  // Zero
-#define FLAG_S  0x80  // Sign
+// CPU Flag bits (correct Z80 flag bit positions)
+#define FLAG_C  0x01  // Carry (bit 0)
+#define FLAG_N  0x02  // Subtract (bit 1)
+#define FLAG_PV 0x04  // Parity/Overflow (bit 2)
+#define FLAG_F3 0x08  // Undocumented F3 (bit 3)
+#define FLAG_H  0x10  // Half carry (bit 4)
+#define FLAG_F5 0x20  // Undocumented F5 (bit 5)
+#define FLAG_Z  0x40  // Zero (bit 6)
+#define FLAG_S  0x80  // Sign (bit 7)
 
 // Function prototypes
 void cpu_init(void);

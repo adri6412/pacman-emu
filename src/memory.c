@@ -24,8 +24,16 @@ static uint8_t *charset = NULL;  // Character ROM
 static uint8_t *sprites = NULL;  // Sprite ROM
 static uint32_t *palette = NULL; // Color palette
 
-// I/O ports
+// I/O ports and hardware registers
 static uint8_t io_ports[256];
+static uint8_t interrupt_enable = 0;
+static uint8_t sound_enable = 0;
+static uint8_t flip_screen = 0;
+static uint8_t lamp1 = 0;
+static uint8_t lamp2 = 0;
+static uint8_t coin_lockout = 0;
+static uint8_t coin_counter = 0;
+static uint8_t watchdog_counter = 0;
 
 // Standard Pacman MAME ROM filenames
 static const MameRomSet pacman_roms = {
@@ -389,46 +397,101 @@ void memory_reset(void) {
     memset(io_ports, 0, sizeof(io_ports));
 }
 
-// Read a byte from memory
+// Read a byte from memory (based on MAME pacman_map implementation)
 uint8_t memory_read_byte(uint16_t address) {
-    // Memory map:
+    // Memory map (based on MAME documentation):
     // 0000-3FFF: ROM (16KB)
-    // 4000-4FFF: RAM (4KB)
-    // 5000-503F: Video RAM (1KB)
-    // 5040-507F: Color RAM (1KB)
-    // 5000-5FFF: I/O Ports (overlaps with VRAM and CRAM)
+    // 4000-43FF: Video RAM (1KB)
+    // 4400-47FF: Color RAM (1KB)
+    // 4800-4FFF: Work RAM (2KB)
+    // 5000-5FFF: I/O Ports
     
     if (address <= ROM_END) {
+        // ROM (0x0000-0x3FFF)
         return rom[address];
-    } else if (address >= RAM_START && address <= RAM_END) {
-        return ram[address - RAM_START];
     } else if (address >= VRAM_START && address <= VRAM_END) {
+        // Video RAM (0x4000-0x43FF)
         return vram[address - VRAM_START];
     } else if (address >= CRAM_START && address <= CRAM_END) {
+        // Color RAM (0x4400-0x47FF)
         return cram[address - CRAM_START];
+    } else if (address >= WRAM_START && address <= WRAM_END) {
+        // Work RAM (0x4800-0x4FFF)
+        return ram[address - WRAM_START];
+    } else if (address == IO_IN0) {
+        // Input port 0 (0x5000) - Player 1 controls, coin, service
+        return io_read_byte(address & 0xFF);
+    } else if (address == IO_IN1) {
+        // Input port 1 (0x5040) - Player 2 controls
+        return io_read_byte(address & 0xFF);
+    } else if (address == IO_DSW1) {
+        // DIP switches 1 (0x5080) - Game settings
+        return io_read_byte(address & 0xFF);
+    } else if (address == IO_DSW2) {
+        // DIP switches 2 (0x50C0) - Only on some games
+        return io_read_byte(address & 0xFF);
     } else if (address >= IO_START && address <= IO_END) {
-        // I/O ports - simplified for this implementation
-        // In real Pacman, this would handle various hardware registers
-        return io_read_byte((address & 0xFF));
+        // Other I/O ports
+        return io_read_byte(address & 0xFF);
     }
     
     // Default for unmapped addresses
+    // printf("Warning: Read from unmapped address: 0x%04X\n", address);
     return 0xFF;
 }
 
-// Write a byte to memory
+// Write a byte to memory (based on MAME pacman_map implementation)
 void memory_write_byte(uint16_t address, uint8_t value) {
     if (address <= ROM_END) {
         // ROM is read-only, ignore writes
         return;
-    } else if (address >= RAM_START && address <= RAM_END) {
-        ram[address - RAM_START] = value;
     } else if (address >= VRAM_START && address <= VRAM_END) {
+        // Video RAM is writable (0x4000-0x43FF)
         vram[address - VRAM_START] = value;
     } else if (address >= CRAM_START && address <= CRAM_END) {
+        // Color RAM is writable (0x4400-0x47FF)
         cram[address - CRAM_START] = value;
+    } else if (address >= WRAM_START && address <= WRAM_END) {
+        // Work RAM is writable (0x4800-0x4FFF)
+        ram[address - WRAM_START] = value;
+        
+        // Special case: sprite data (0x4FF0-0x4FFF)
+        // In Pacman, 8 pairs of bytes at 0x4FF0-0x4FFF define sprite attributes
+        // First byte: sprite image number (bits 2-7), Y flip (bit 0), X flip (bit 1)
+        // Second byte: color
+    } else if (address == INTERRUPT_EN) {
+        // 0x5000: Interrupt enable
+        interrupt_enable = value & 0x01;
+    } else if (address == SOUND_EN) {
+        // 0x5001: Sound enable
+        sound_enable = value & 0x01;
+    } else if (address == FLIP_SCREEN) {
+        // 0x5003: Flip screen
+        flip_screen = value & 0x01;
+    } else if (address == PLAYER1_LAMP) {
+        // 0x5004: 1 player start lamp
+        lamp1 = value & 0x01;
+    } else if (address == PLAYER2_LAMP) {
+        // 0x5005: 2 players start lamp
+        lamp2 = value & 0x01;
+    } else if (address == COIN_LOCKOUT) {
+        // 0x5006: Coin lockout
+        coin_lockout = value & 0x01;
+    } else if (address == COIN_COUNTER) {
+        // 0x5007: Coin counter
+        coin_counter = value & 0x01;
+    } else if (address >= SOUND_REG_START && address <= SOUND_REG_END) {
+        // 0x5040-0x505F: Sound registers
+        // These registers control the Namco sound hardware
+        io_write_byte((address & 0xFF), value);
+    } else if (address >= SPRITE_COORD && address <= SPRITE_COORD + 0x0F) {
+        // 0x5060-0x506F: Sprite coordinates, x/y pairs for 8 sprites
+        io_write_byte((address & 0xFF), value);
+    } else if (address == WATCHDOG) {
+        // 0x50C0: Watchdog reset
+        watchdog_counter = 0;
     } else if (address >= IO_START && address <= IO_END) {
-        // I/O ports - simplified for this implementation
+        // Other I/O ports
         io_write_byte((address & 0xFF), value);
     }
 }
@@ -446,43 +509,125 @@ void memory_write_word(uint16_t address, uint16_t value) {
     memory_write_byte(address + 1, value >> 8);
 }
 
-// I/O port read
+// I/O port read (based on MAME implementation)
 uint8_t io_read_byte(uint8_t port) {
-    // Map ports to specific hardware components in Pacman
-    // Simplified implementation
+    // According to MAME, Pacman has the following I/O reads:
+    // 0x5000 - IN0 - Player 1 controls, coin, service
+    // 0x5040 - IN1 - Player 2 controls
+    // 0x5080 - DSW1 - Game settings
+    // 0x50C0 - DSW2 - Only on some games (Ponpoko, mschamp, Van Van Car, Rock and Roll Trivia 2)
+    
     switch (port) {
-        case 0x00: // IN0 - Player 1 controls
-            return 0xFF; // Active low - no buttons pressed
+        case (IO_IN0 & 0xFF): // IN0 - Player 1 controls, coin, service (0x00)
+            // Bit 0: UP
+            // Bit 1: LEFT
+            // Bit 2: RIGHT
+            // Bit 3: DOWN
+            // Bit 4: Special control (rack advance, button, etc. depending on game)
+            // Bit 5: Start 1
+            // Bit 6: Start 2
+            // Bit 7: Coin
+            return io_ports[port];
             
-        case 0x01: // IN1 - Player 2 controls
-            return 0xFF; // Active low - no buttons pressed
+        case (IO_IN1 & 0xFF): // IN1 - Player 2 controls (0x40)
+            // Bit 0: UP
+            // Bit 1: LEFT
+            // Bit 2: RIGHT
+            // Bit 3: DOWN
+            // Bit 4: Special control
+            // Bit 5: Not used
+            // Bit 6: Not used
+            // Bit 7: Not used
+            return io_ports[port];
             
-        case 0x02: // DSW1 - Dipswitch settings
-            return 0xFF; // All switches off
+        case (IO_DSW1 & 0xFF): // DSW1 - Dipswitch settings (0x80)
+            // Bits 0-1: Lives (00 = 1 life, 01 = 2 lives, 10 = 3 lives, 11 = 5 lives)
+            // Bit 2: Cabinet type (0 = upright, 1 = cocktail)
+            // Bits 3-4: Difficulty (00 = hardest, 11 = easiest)
+            // Bits 5-6: Bonus (00 = 10000, 01 = 15000, 10 = 20000, 11 = no bonus)
+            // Bit 7: Coin (0 = 1 coin/1 game, 1 = 1 coin/2 games)
+            return io_ports[port];
+            
+        case (IO_DSW2 & 0xFF): // DSW2 - Dipswitches on some games (0xC0)
+            // Game-specific switches
+            return io_ports[port];
+            
+        case (WATCHDOG & 0xFF): // Watchdog reset (0xC0) - same address as DSW2
+            // This is a write-only port on the real hardware, but some games
+            // try to read from it
+            return 0xFF;
             
         default:
             return io_ports[port];
     }
 }
 
-// I/O port write
+// I/O port write (based on MAME implementation)
 void io_write_byte(uint8_t port, uint8_t value) {
-    // Map ports to specific hardware components in Pacman
-    // Simplified implementation
+    // According to MAME, Pacman has the following I/O writes:
+    // 0x5000 - Interrupt enable
+    // 0x5001 - Sound enable
+    // 0x5002 - No connection (not used)
+    // 0x5003 - Flip screen
+    // 0x5004 - Player 1 start lamp
+    // 0x5005 - Player 2 start lamp
+    // 0x5006 - Coin lockout (not implemented on most boards)
+    // 0x5007 - Coin counter
+    // 0x5040-0x505F - Sound registers
+    // 0x5060-0x506F - Sprite coordinates
+    // 0x50C0 - Watchdog reset
+    
     switch (port) {
-        case 0x05: // Sound enable
+        case (INTERRUPT_EN & 0xFF): // Interrupt enable (0x00)
+            interrupt_enable = value & 0x01;
             io_ports[port] = value;
             break;
             
-        case 0x06: // Flip screen
+        case (SOUND_EN & 0xFF): // Sound enable (0x01)
+            sound_enable = value & 0x01;
             io_ports[port] = value;
             break;
             
-        case 0x07: // Coin counter
+        case (FLIP_SCREEN & 0xFF): // Flip screen (0x03)
+            flip_screen = value & 0x01;
+            io_ports[port] = value;
+            break;
+            
+        case (PLAYER1_LAMP & 0xFF): // Player 1 start lamp (0x04)
+            lamp1 = value & 0x01;
+            io_ports[port] = value;
+            break;
+            
+        case (PLAYER2_LAMP & 0xFF): // Player 2 start lamp (0x05)
+            lamp2 = value & 0x01;
+            io_ports[port] = value;
+            break;
+            
+        case (COIN_LOCKOUT & 0xFF): // Coin lockout (0x06)
+            coin_lockout = value & 0x01;
+            io_ports[port] = value;
+            break;
+            
+        case (COIN_COUNTER & 0xFF): // Coin counter (0x07)
+            coin_counter = value & 0x01;
+            io_ports[port] = value;
+            break;
+            
+        case (WATCHDOG & 0xFF): // Watchdog reset (0xC0)
+            watchdog_counter = 0;
             io_ports[port] = value;
             break;
             
         default:
+            // Handle sound registers (0x40-0x5F)
+            if (port >= (SOUND_REG_START & 0xFF) && port <= (SOUND_REG_END & 0xFF)) {
+                // Sound voice registers - to implement Namco sound
+            }
+            // Handle sprite coordinates (0x60-0x6F)
+            else if (port >= (SPRITE_COORD & 0xFF) && port <= ((SPRITE_COORD & 0xFF) + 0x0F)) {
+                // Sprite coordinates
+            }
+            
             io_ports[port] = value;
             break;
     }
@@ -511,4 +656,38 @@ uint8_t* memory_get_spritedata(void) {
 // Get access to color palette
 uint32_t* memory_get_palette(void) {
     return palette;
+}
+
+// Getter functions for hardware flags
+uint8_t memory_get_interrupt_enable(void) {
+    return interrupt_enable;
+}
+
+uint8_t memory_get_sound_enable(void) {
+    return sound_enable;
+}
+
+uint8_t memory_get_flip_screen(void) {
+    return flip_screen;
+}
+
+uint8_t memory_get_lamp1(void) {
+    return lamp1;
+}
+
+uint8_t memory_get_lamp2(void) {
+    return lamp2;
+}
+
+uint8_t memory_get_coin_lockout(void) {
+    return coin_lockout;
+}
+
+uint8_t memory_get_coin_counter(void) {
+    return coin_counter;
+}
+
+// Set input ports - for external input handling
+void memory_set_input_port(uint8_t port, uint8_t value) {
+    io_ports[port] = value;
 }
