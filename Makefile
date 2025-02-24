@@ -73,7 +73,7 @@ $(TARGET): $(OBJS)
 
 # Compile test ROM generator
 $(TEST_ROM_GEN): $(SRC_DIR)/test_rom.c
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) -Wall -Wextra -g -O2 -o $@ $<
 
 # Generate test ROM
 $(TEST_ROM): $(TEST_ROM_GEN)
