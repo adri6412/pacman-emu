@@ -430,8 +430,8 @@ uint8_t memory_read_byte(uint16_t address) {
     } else if (address == IO_DSW2) {
         // DIP switches 2 (0x50C0) - Only on some games
         return io_read_byte(address & 0xFF);
-    } else if (address >= IO_START && address <= IO_END) {
-        // Other I/O ports
+    } else if (address >= 0x5000 && address <= 0x50FF) {
+        // Other I/O ports (I/O range is 0x5000-0x50FF)
         return io_read_byte(address & 0xFF);
     }
     
@@ -490,8 +490,8 @@ void memory_write_byte(uint16_t address, uint8_t value) {
     } else if (address == WATCHDOG) {
         // 0x50C0: Watchdog reset
         watchdog_counter = 0;
-    } else if (address >= IO_START && address <= IO_END) {
-        // Other I/O ports
+    } else if (address >= 0x5000 && address <= 0x50FF) {
+        // Other I/O ports (I/O range is 0x5000-0x50FF)
         io_write_byte((address & 0xFF), value);
     }
 }
