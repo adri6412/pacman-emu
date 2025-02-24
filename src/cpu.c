@@ -1,15 +1,17 @@
 #include "../include/cpu.h"
 #include "../include/memory.h"
+#include "../src/z80/z80.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <SDL2/SDL.h>  // For SDL_Delay
 
 // External declaration of debug_log function
 extern void debug_log(const char *format, ...);
 
-// CPU state
-static Z80_Registers regs;
+// Z80 CPU instance
+static z80 cpu;
 static bool interrupt_pending = false;
 
 // Lookup tables for instruction timing
@@ -32,31 +34,59 @@ static const uint8_t cycle_counts[256] = {
     5, 10, 10, 4, 10, 11, 7, 11, 5, 6, 10, 4, 10, 0, 7, 11
 };
 
-// CPU initialization (based on MAME Z80 implementation)
-void cpu_init(void) {
-    cpu_reset();
+// Memory read callback for Z80
+static uint8_t cpu_read_callback(void* userdata, uint16_t address) {
+    return memory_read_byte(address);
 }
 
-// Reset the CPU to initial state (based on MAME Z80 implementation)
+// Memory write callback for Z80
+static void cpu_write_callback(void* userdata, uint16_t address, uint8_t data) {
+    memory_write_byte(address, data);
+}
+
+// IO read callback for Z80
+static uint8_t cpu_port_in(z80* const z, uint8_t port) {
+    return io_read_byte(port);
+}
+
+// IO write callback for Z80
+static void cpu_port_out(z80* const z, uint8_t port, uint8_t data) {
+    io_write_byte(port, data);
+}
+
+// CPU initialization
+void cpu_init(void) {
+    // Initialize the Z80 CPU
+    z80_init(&cpu);
+    
+    // Set up memory and IO callbacks
+    cpu.read_byte = cpu_read_callback;
+    cpu.write_byte = cpu_write_callback;
+    cpu.port_in = cpu_port_in;
+    cpu.port_out = cpu_port_out;
+    cpu.userdata = NULL; // We don't need any user data for now
+    
+    debug_log("Z80 CPU initialized using superzazu's Z80");
+}
+
+// Reset the CPU to initial state
 void cpu_reset(void) {
-    // Clear all registers
-    memset(&regs, 0, sizeof(regs));
+    // Initialize the Z80 CPU - this also resets the CPU
+    z80_init(&cpu);
     
-    // Standard Z80 reset state
-    regs.pc = 0;            // Start at address 0 (ROM)
-    regs.sp = 0xF000;       // Initial stack pointer in high RAM
-    regs.iff1 = false;      // Interrupts disabled
-    regs.iff2 = false;
-    regs.im = 0;            // Interrupt mode 0
-    regs.i = 0;             // Interrupt register
-    regs.r = 0;             // Refresh register
-    regs.halted = false;    // Not halted
-    regs.cycles = 0;
+    // Set up callbacks again (in case they were lost during init)
+    cpu.read_byte = cpu_read_callback;
+    cpu.write_byte = cpu_write_callback;
+    cpu.port_in = cpu_port_in;
+    cpu.port_out = cpu_port_out;
     
-    // Initialize flags to known values (some games check for specific flag bits)
-    regs.f = FLAG_F3 | FLAG_F5; // Set undocumented flags
+    // Set some initial values
+    cpu.pc = 0;         // Start at address 0 (ROM)
+    cpu.sp = 0xF000;    // Initial stack pointer in high RAM
     
     interrupt_pending = false;
+    
+    debug_log("Z80 CPU reset");
 }
 
 // Read byte from memory
@@ -98,60 +128,34 @@ static uint16_t pop(void) {
 
 // Handle interrupt request
 void cpu_interrupt(void) {
-    if (regs.iff1) {
-        interrupt_pending = true;
+    if (cpu.iff1) {
+        // Generate an interrupt with data 0xFF (RST 38h)
+        z80_gen_int(&cpu, 0xFF);
+        debug_log("Z80 interrupt requested");
     }
 }
 
-// Process a pending interrupt
+// Process a pending interrupt - this is handled by libz80 now
 static void handle_interrupt(void) {
-    if (interrupt_pending && regs.iff1) {
-        interrupt_pending = false;
-        regs.iff1 = false;
-        regs.iff2 = false;
-        
-        if (regs.halted) {
-            regs.halted = false;
-            regs.pc++;
-        }
-        
-        switch (regs.im) {
-            case 0:
-                // Mode 0: Execute instruction on data bus (0xFF for Pacman)
-                // In this simplified emulation, we just handle RST 38h
-                push(regs.pc);
-                regs.pc = 0x0038;
-                regs.cycles += 11;
-                break;
-                
-            case 1:
-                // Mode 1: Jump to 0x0038
-                push(regs.pc);
-                regs.pc = 0x0038;
-                regs.cycles += 13;
-                break;
-                
-            case 2:
-                // Mode 2: Use I register and data bus (0xFF for Pacman)
-                {
-                    uint16_t addr = (regs.i << 8) | 0xFF;
-                    uint16_t jump_addr = memory_read_word(addr);
-                    push(regs.pc);
-                    regs.pc = jump_addr;
-                    regs.cycles += 19;
-                }
-                break;
-        }
-    }
+    // Nothing to do here, libz80 handles interrupts internally
 }
 
 // Execute CPU instructions for one frame (~16.6ms)
-// For simplicity, we'll run a fixed number of cycles per frame
 void cpu_execute_frame(void) {
-    // For testing purposes, we'll create some pattern in VRAM directly
-    // since we don't have a full CPU emulation yet
+    // Pacman Z80 runs at 3.072 MHz, so one frame is about 50,000 cycles
+    const uint32_t CYCLES_PER_FRAME = 50000;
+    
+    // Initialize test pattern at first run
     static bool initialized_vram = false;
-    static bool executed_rom = false;
+    static bool first_execution = true;
+    
+    if (first_execution) {
+        first_execution = false;
+        debug_log("ROM starting bytes: %02X %02X %02X %02X", 
+                 cpu_read_callback(NULL, 0), cpu_read_callback(NULL, 1),
+                 cpu_read_callback(NULL, 2), cpu_read_callback(NULL, 3));
+        debug_log("Z80 emulation starting");
+    }
     
     if (!initialized_vram) {
         debug_log("Initializing test pattern in VRAM");
@@ -273,142 +277,185 @@ void cpu_execute_frame(void) {
         debug_log("ROM execution initialized");
     }
     
-    // Pacman Z80 runs at 3.072 MHz, so one frame is about 50,000 cycles
-    const uint32_t CYCLES_PER_FRAME = 50000;
+    // Now execute some CPU cycles for this frame
+    const uint32_t CYCLES_PER_FRAME = 50000; // Pacman Z80 runs at 3.072 MHz (50000 cycles/frame)
+    uint32_t executed_cycles = 0;
     
-    // Simulate Z80 execution but with safety guards to prevent infinite loops
-    uint32_t cycles_this_frame = 0;
-    uint32_t max_instructions = 10000; // Safety limit to prevent infinite loops
-    uint32_t instruction_count = 0;
+    // Execute Z80 instructions until we reach the required number of cycles
+    unsigned long start_cyc = cpu.cyc;
     
-    while (cycles_this_frame < CYCLES_PER_FRAME && instruction_count < max_instructions) {
-        // SAFETY CHECK: Ensure PC is within valid ROM/RAM bounds
-        if (regs.pc >= 0x8000) {
-            debug_log("ERROR: PC out of bounds: 0x%04X - resetting to 0", regs.pc);
-            regs.pc = 0;  // Reset to ROM start
-            regs.halted = true;
+    while ((cpu.cyc - start_cyc) < CYCLES_PER_FRAME) {
+        // Execute one Z80 instruction
+        z80_step(&cpu);
+        
+        // Avoid infinite loops by limiting iterations
+        if ((cpu.cyc - start_cyc) > CYCLES_PER_FRAME * 2) {
+            debug_log("Warning: Breaking out of CPU loop - too many cycles");
             break;
         }
+    }
+    
+    executed_cycles = cpu.cyc - start_cyc;
+    
+    // Add a debugging log every 60 frames
+    static int frame_counter = 0;
+    frame_counter++;
+    
+    if (frame_counter % 60 == 0) {
+        debug_log("Z80 PC=0x%04X, SP=0x%04X, A=0x%02X executed %lu cycles",
+                cpu.pc, cpu.sp, cpu.a, executed_cycles);
+    }
+    
+    // Get VRAM and CRAM for display
+    uint8_t *vram = memory_get_vram();
+    uint8_t *cram = memory_get_cram();
+    
+    if (vram && cram) {
+        // Set up a more elaborate test pattern that looks like Pacman
+        static bool first_frame = true;
         
-        if (regs.halted) {
-            // If CPU is halted, just count cycles until an interrupt
-            cycles_this_frame += 4;
-            continue;
-        }
-        
-        // Fetch the current opcode
-        uint8_t opcode = cpu_read_byte(regs.pc);
-        uint8_t cycles = cycle_counts[opcode];
-        
-        // Debug output for instructions
-        if (instruction_count < 20 || opcode != 0xFF) {
-            debug_log("Executing opcode %02X at PC=%04X", opcode, regs.pc);
-        }
-        
-        // Handle Z80 instructions
-        switch (opcode) {
-            case 0x00:  // NOP
-                regs.pc++;
-                break;
-                
-            case 0x3E:  // LD A, n
-                regs.a = fetch_byte();
-                regs.pc++;
-                break;
-                
-            case 0x47:  // LD B, A
-                regs.b = regs.a;
-                regs.pc++;
-                break;
-                
-            case 0x76:  // HALT
-                regs.halted = true;
-                regs.pc++;
-                break;
-                
-            case 0xC3:  // JP nn
-                {
-                    uint16_t jump_addr = fetch_word();
-                    // SAFETY CHECK: Avoid jumping outside ROM
-                    if (jump_addr < 0x8000) {
-                        regs.pc = jump_addr;
-                    } else {
-                        debug_log("ERROR: Jump to invalid address: 0x%04X", jump_addr);
-                        regs.pc = 0;  // Reset to start
-                        regs.halted = true;
+        if (first_frame) {
+            debug_log("Creating elaborate Pacman test display");
+            first_frame = false;
+            
+            // Clear VRAM and CRAM
+            memset(vram, 0, 0x0400);
+            memset(cram, 0, 0x0400);
+            
+            // Create a maze pattern
+            for (int y = 0; y < 36; y++) {
+                for (int x = 0; x < 28; x++) {
+                    int idx = y * 32 + x;  // VRAM layout is 32 columns wide
+                    
+                    // Border
+                    if (x == 0 || x == 27 || y == 0 || y == 35) {
+                        vram[idx] = 0x01;  // Wall character
+                        cram[idx] = 0x01;  // Blue
+                    }
+                    // Grid pattern for maze (vertical lines)
+                    else if (x % 4 == 0 && y > 5 && y < 30) {
+                        vram[idx] = 0x01;  // Wall character
+                        cram[idx] = 0x01;  // Blue
+                    }
+                    // Grid pattern for maze (horizontal lines)
+                    else if (y % 4 == 0 && x > 5 && x < 22) {
+                        vram[idx] = 0x01;  // Wall character
+                        cram[idx] = 0x01;  // Blue
+                    }
+                    // Dots everywhere else with some spacing
+                    else if ((x + y) % 2 == 0) {
+                        vram[idx] = 0x02;  // Dot character
+                        cram[idx] = 0x06;  // White/yellow
                     }
                 }
-                break;
-                
-            case 0xCD:  // CALL nn
-                {
-                    uint16_t call_addr = fetch_word();
-                    // SAFETY CHECK: Avoid calling outside ROM
-                    if (call_addr < 0x8000) {
-                        push(regs.pc);
-                        regs.pc = call_addr;
-                    } else {
-                        debug_log("ERROR: Call to invalid address: 0x%04X", call_addr);
-                        regs.pc += 2;  // Skip the address bytes
-                    }
+            }
+            
+            // Add "HELLO WORLD" message in center of screen
+            const uint8_t hello_world[] = {
+                0x01, 0x02, 0x03, 0x03, 0x04, 0x00, 
+                0x05, 0x04, 0x06, 0x03, 0x07  // HELLO WORLD
+            };
+            
+            int text_y = 8;   // Top section of screen
+            int text_x = 9;   // Center horizontally
+            
+            // Write "HELLO WORLD" in yellow
+            for (int i = 0; i < sizeof(hello_world); i++) {
+                int idx = text_y * 32 + text_x + i;
+                vram[idx] = hello_world[i];
+                cram[idx] = 0x05;  // Yellow
+            }
+            
+            // Add Pacman and ghosts in specific positions
+            // Pacman in bottom half
+            int pacman_y = 20;
+            int pacman_x = 14;
+            vram[pacman_y * 32 + pacman_x] = 0x04;  // Pacman character
+            cram[pacman_y * 32 + pacman_x] = 0x05;  // Yellow
+            
+            // Ghosts in different positions
+            int ghost_positions[4][2] = {
+                {12, 10},  // Ghost 1 (red)
+                {12, 17},  // Ghost 2 (pink)
+                {22, 10},  // Ghost 3 (cyan)
+                {22, 17}   // Ghost 4 (orange)
+            };
+            
+            uint8_t ghost_colors[4] = {0x01, 0x03, 0x02, 0x04};  // Red, Pink, Cyan, Orange
+            
+            for (int i = 0; i < 4; i++) {
+                int idx = ghost_positions[i][0] * 32 + ghost_positions[i][1];
+                vram[idx] = 0x05 + i;  // Ghost characters
+                cram[idx] = ghost_colors[i];
+            }
+            
+            // Set up sprites in VRAM
+            // In Pacman, sprites data is at 0x4FF0-0x4FFF (last 16 bytes of VRAM)
+            // Each sprite is 2 bytes: sprite number + flags, color
+            for (int i = 0; i < 8; i++) {
+                if (i < 5) {  // Only 5 sprites: Pacman + 4 ghosts
+                    vram[0xFF0 + i*2] = i << 2;  // Sprite number, no flip flags
+                    vram[0xFF1 + i*2] = (i == 0) ? 0x05 : ghost_colors[i-1];  // Color (Pacman yellow, ghosts per color)
+                } else {
+                    vram[0xFF0 + i*2] = 0;
+                    vram[0xFF1 + i*2] = 0;
                 }
-                break;
-                
-            case 0xC9:  // RET
-                regs.pc = pop();
-                break;
-                
-            case 0xED:  // Extended instructions
-                {
-                    uint8_t extended_op = fetch_byte();
-                    if (extended_op == 0x47) {  // LD I, A
-                        regs.i = regs.a;
-                    } else {
-                        debug_log("Unhandled extended opcode: ED %02X", extended_op);
-                    }
-                    regs.pc++;
-                }
-                break;
-                
-            case 0xF3:  // DI
-                regs.iff1 = false;
-                regs.iff2 = false;
-                regs.pc++;
-                break;
-                
-            case 0xFB:  // EI
-                regs.iff1 = true;
-                regs.iff2 = true;
-                regs.pc++;
-                break;
-                
-            case 0xFF:  // RST 38h
-                // This is a common "filler" in ROM, handle it gracefully
-                push(regs.pc + 1);
-                regs.pc = 0x0038;  // Jump to interrupt vector
-                break;
-                
-            default:
-                // For unimplemented opcodes, just advance PC
-                debug_log("Unimplemented opcode: %02X at PC=%04X", opcode, regs.pc);
-                regs.pc++;
-                break;
+            }
+            
+            // Set sprite positions in I/O ports
+            // Pacman centered slightly lower
+            memory_set_input_port(0x60, 112);  // Pacman X
+            memory_set_input_port(0x61, 180);  // Pacman Y
+            
+            // Ghosts in cardinal positions around Pacman
+            memory_set_input_port(0x62, 80);   // Ghost 1 X (left)
+            memory_set_input_port(0x63, 180);  // Ghost 1 Y
+            memory_set_input_port(0x64, 144);  // Ghost 2 X (right)
+            memory_set_input_port(0x65, 180);  // Ghost 2 Y
+            memory_set_input_port(0x66, 112);  // Ghost 3 X (up)
+            memory_set_input_port(0x67, 140);  // Ghost 3 Y
+            memory_set_input_port(0x68, 112);  // Ghost 4 X (down)
+            memory_set_input_port(0x69, 220);  // Ghost 4 Y
+            
+            debug_log("Pacman demo screen created");
         }
         
-        cycles_this_frame += cycles;
-        instruction_count++;
+        // Move sprites a bit each frame for animation
+        static int frame_counter = 0;
+        frame_counter++;
         
-        // If we've executed more than 100 instructions, insert a small delay 
-        // to prevent GUI freezing (this is a temporary fix)
-        if (instruction_count >= 100 && instruction_count % 100 == 0) {
-            // Yield to the OS to avoid freezing the GUI
-            SDL_Delay(1);
+        if (frame_counter % 5 == 0) {  // Every 5 frames
+            // Make Pacman move in a circle
+            int pacman_x = io_read_byte(0x60);
+            int pacman_y = io_read_byte(0x61);
+            
+            // Calculate new position in a circular path
+            double angle = (frame_counter % 120) * 3.14159 * 2.0 / 120.0;
+            pacman_x = 112 + (int)(30.0 * cos(angle));
+            pacman_y = 180 + (int)(30.0 * sin(angle));
+            
+            memory_set_input_port(0x60, pacman_x);
+            memory_set_input_port(0x61, pacman_y);
+            
+            // Move ghosts slightly to create movement
+            for (int i = 1; i < 4; i++) {
+                int ghost_x = io_read_byte(0x60 + i*2);
+                int ghost_y = io_read_byte(0x61 + i*2);
+                
+                // Each ghost has a different movement pattern
+                double ghost_angle = (frame_counter % 120) * 3.14159 * 2.0 / 120.0 + i * 3.14159 / 2.0;
+                ghost_x = 112 + (int)(50.0 * cos(ghost_angle));
+                ghost_y = 180 + (int)(50.0 * sin(ghost_angle));
+                
+                memory_set_input_port(0x60 + i*2, ghost_x);
+                memory_set_input_port(0x61 + i*2, ghost_y);
+            }
         }
     }
     
-    if (instruction_count >= max_instructions) {
-        debug_log("WARNING: Hit instruction limit (%d) - possible infinite loop", max_instructions);
-    }
+    // Skip CPU execution completely for now
+    // This is a temporary measure until we can properly integrate Z80 emulation
+    cycles_this_frame = CYCLES_PER_FRAME;
     
     // Handle interrupts at the end of the frame
     if (regs.iff1) {
