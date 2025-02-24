@@ -121,14 +121,16 @@ bool memory_init(const char *rom_path) {
     sprites = (uint8_t *)malloc(64 * 16); // 64 sprites, 16 bytes per sprite
     palette = (uint32_t *)malloc(256 * sizeof(uint32_t)); // 256 colors
     
-    // Initialize memory to prevent uninitialized access
-    if (rom) memset(rom, 0, ROM_SIZE);
-    
+    // Check if allocation succeeded
     if (!rom || !ram || !vram || !cram || !charset || !sprites || !palette) {
-        fprintf(stderr, "Failed to allocate memory\n");
+        fprintf(stderr, "ERROR: Memory allocation failed\n");
         memory_cleanup();
         return false;
     }
+    
+    // Initialize memory to prevent uninitialized access
+    memset(rom, 0, ROM_SIZE);
+    printf("Memory allocation successful, initializing...\n");
     
     // Clear memory
     memset(ram, 0, RAM_SIZE);
@@ -400,8 +402,14 @@ bool memory_init_mame_set(const char *rom_dir) {
     printf("Ensuring default colors are set\n");
     for (int i = 0; i < 32; i++) {
         // Make sure we have some visible colors (might be overwritten by ROM loading)
-        uint8_t value = i % 8;  // Just ensure we have some variety
-        video_update_palette(i, value);
+        uint8_t r = ((i & 1) ? 0xFF : 0);
+        uint8_t g = ((i & 2) ? 0xFF : 0);
+        uint8_t b = ((i & 4) ? 0xFF : 0);
+        
+        // Set the palette directly
+        if (palette) {
+            palette[i] = 0xFF000000 | (r << 16) | (g << 8) | b;
+        }
     }
     
     // Always call memory_reset to set up default sprite positions and other state

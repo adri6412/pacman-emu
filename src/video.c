@@ -267,7 +267,12 @@ void video_render(void) {
     uint8_t *vram = memory_get_vram();
     uint8_t *cram = memory_get_cram();
     
-    if (!vram || !cram) return;
+    if (!vram || !cram) {
+        printf("WARNING: Video memory not initialized, rendering test pattern\n");
+        // If video memory is not available, just draw a test pattern
+        draw_test_pattern();
+        return;
+    }
     
     // Check if screen is flipped (temporarily disabled for debugging)
     bool flip = false; // memory_get_flip_screen() != 0;
@@ -341,6 +346,55 @@ void video_render(void) {
     // Draw the texture scaled to window size
     SDL_Rect dest_rect = {0, 0, SCREEN_WIDTH * scale, SCREEN_HEIGHT * scale};
     SDL_RenderCopy(renderer, screen_texture, NULL, &dest_rect);
+}
+
+// Forward declaration
+static void draw_test_pattern(void);
+
+// Draw a test pattern to show something when VRAM is not available
+static void draw_test_pattern(void) {
+    // Draw a colored checkerboard pattern
+    for (int y = 0; y < SCREEN_HEIGHT; y++) {
+        for (int x = 0; x < SCREEN_WIDTH; x++) {
+            int cell_x = x / 16;
+            int cell_y = y / 16;
+            int color_index = (cell_x + cell_y) % 4;
+            
+            // Some vibrant colors
+            uint32_t colors[4] = {
+                0xFF0000FF,  // Red
+                0xFF00FF00,  // Green
+                0xFFFF0000,  // Blue
+                0xFFFFFF00   // Yellow
+            };
+            
+            pixel_buffer[y * SCREEN_WIDTH + x] = colors[color_index];
+        }
+    }
+    
+    // Draw text "PACMAN EMU" in the center
+    // Simple font rendering...
+    const char* text = "PACMAN EMU";
+    int text_x = (SCREEN_WIDTH - (strlen(text) * 8)) / 2;
+    int text_y = SCREEN_HEIGHT / 2 - 4;
+    
+    // Draw each character (very simple, just rectangles for demonstration)
+    for (int i = 0; text[i] != '\0'; i++) {
+        int x = text_x + i * 8;
+        for (int py = 0; py < 8; py++) {
+            for (int px = 0; px < 8; px++) {
+                // Simple shapes for letters (just rectangles with holes)
+                if (px > 0 && px < 7 && py > 0 && py < 7) {
+                    continue;  // Hollow center
+                }
+                
+                if (x + px >= 0 && x + px < SCREEN_WIDTH && 
+                    text_y + py >= 0 && text_y + py < SCREEN_HEIGHT) {
+                    pixel_buffer[(text_y + py) * SCREEN_WIDTH + (x + px)] = 0xFFFFFFFF;  // White
+                }
+            }
+        }
+    }
 }
 
 // Draw debug information (enhanced for MAME-style debugging)
