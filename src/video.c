@@ -362,9 +362,6 @@ void video_render(void) {
     SDL_RenderCopy(renderer, screen_texture, NULL, &dest_rect);
 }
 
-// Forward declaration
-static void draw_test_pattern(void);
-
 // Draw a test pattern to show something when VRAM is not available
 static void draw_test_pattern(void) {
     // Draw a colored checkerboard pattern
@@ -479,7 +476,6 @@ void video_draw_debug_info(void) {
             }
             
             // Draw sprite number in the top-left corner of the sprite
-            char sprite_num_str[2] = { '0' + i, 0 };
             if (sprite_x >= 0 && sprite_x + 8 < SCREEN_WIDTH &&
                 sprite_y >= 0 && sprite_y + 8 < SCREEN_HEIGHT) {
                 // Simple way to draw a number (not very pretty but works for debug)

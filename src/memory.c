@@ -125,8 +125,8 @@ static bool load_rom_file(const char *filepath, uint8_t *buffer, size_t size) {
     
     // Dump first 16 bytes for verification
     debug_log("First 16 bytes of ROM data:");
-    for (int i = 0; i < 16 && i < read_size; i++) {
-        debug_log("  Byte %d: 0x%02X", i, buffer[i]);
+    for (size_t i = 0; i < 16 && i < read_size; i++) {
+        debug_log("  Byte %zu: 0x%02X", i, buffer[i]);
     }
     
     return true;
