@@ -14,43 +14,27 @@ extern void debug_log(const char *format, ...);
 static z80 cpu;
 static bool interrupt_pending = false;
 
-// Lookup tables for instruction timing
-static const uint8_t cycle_counts[256] = {
-    4, 10, 7, 6, 4, 4, 7, 4, 4, 11, 7, 6, 4, 4, 7, 4,
-    8, 10, 7, 6, 4, 4, 7, 4, 12, 11, 7, 6, 4, 4, 7, 4,
-    7, 10, 16, 6, 4, 4, 7, 4, 7, 11, 16, 6, 4, 4, 7, 4,
-    7, 10, 13, 6, 11, 11, 10, 4, 7, 11, 13, 6, 4, 4, 7, 4,
-    4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
-    4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
-    4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
-    7, 7, 7, 7, 7, 7, 4, 7, 4, 4, 4, 4, 4, 4, 7, 4,
-    4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
-    4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
-    4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
-    4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
-    5, 10, 10, 10, 10, 11, 7, 11, 5, 10, 10, 0, 10, 17, 7, 11,
-    5, 10, 10, 11, 10, 11, 7, 11, 5, 4, 10, 11, 10, 0, 7, 11,
-    5, 10, 10, 19, 10, 11, 7, 11, 5, 4, 10, 4, 10, 0, 7, 11,
-    5, 10, 10, 4, 10, 11, 7, 11, 5, 6, 10, 4, 10, 0, 7, 11
-};
-
 // Memory read callback for Z80
 static uint8_t cpu_read_callback(void* userdata, uint16_t address) {
+    (void)userdata; // Silence unused parameter warning
     return memory_read_byte(address);
 }
 
 // Memory write callback for Z80
 static void cpu_write_callback(void* userdata, uint16_t address, uint8_t data) {
+    (void)userdata; // Silence unused parameter warning
     memory_write_byte(address, data);
 }
 
 // IO read callback for Z80
 static uint8_t cpu_port_in(z80* const z, uint8_t port) {
+    (void)z; // Silence unused parameter warning
     return io_read_byte(port);
 }
 
 // IO write callback for Z80
 static void cpu_port_out(z80* const z, uint8_t port, uint8_t data) {
+    (void)z; // Silence unused parameter warning
     io_write_byte(port, data);
 }
 
@@ -99,33 +83,6 @@ void cpu_write_byte(uint16_t address, uint8_t value) {
     memory_write_byte(address, value);
 }
 
-// Read next byte from PC
-static uint8_t fetch_byte(void) {
-    uint8_t value = cpu_read_byte(regs.pc);
-    regs.pc++;
-    return value;
-}
-
-// Read next word from PC
-static uint16_t fetch_word(void) {
-    uint16_t value = cpu_read_byte(regs.pc) | (cpu_read_byte(regs.pc + 1) << 8);
-    regs.pc += 2;
-    return value;
-}
-
-// Push word to stack
-static void push(uint16_t value) {
-    regs.sp -= 2;
-    memory_write_word(regs.sp, value);
-}
-
-// Pop word from stack
-static uint16_t pop(void) {
-    uint16_t value = memory_read_word(regs.sp);
-    regs.sp += 2;
-    return value;
-}
-
 // Handle interrupt request
 void cpu_interrupt(void) {
     if (cpu.iff1) {
@@ -148,6 +105,7 @@ void cpu_execute_frame(void) {
     // Initialize test pattern at first run
     static bool initialized_vram = false;
     static bool first_execution = true;
+    static bool executed_rom = false;
     
     if (first_execution) {
         first_execution = false;
@@ -212,8 +170,8 @@ void cpu_execute_frame(void) {
             int text_y = 15;  // Middle of screen
             int text_x = 9;   // Center horizontally
             
-            for (int i = 0; i < sizeof(hello_world); i++) {
-                int idx = text_y * 32 + text_x + i;
+            for (size_t i = 0; i < hello_world_len; i++) {
+                int idx = text_y * 32 + text_x + (int)i;
                 vram[idx] = hello_world[i];
                 cram[idx] = (i < 5) ? 0x05 : 0x01;  // Yellow for HELLO, Blue for WORLD
             }
@@ -261,16 +219,11 @@ void cpu_execute_frame(void) {
         debug_log("Attempting to execute ROM code");
         
         // Set PC to beginning of ROM
-        regs.pc = 0x0000;
-        
-        // Print the first few bytes of the ROM to check if it's valid
-        uint8_t *rom_data = memory_get_vram() - 0x4000;  // Crude approximation to get ROM address
-        debug_log("ROM starting bytes: %02X %02X %02X %02X", 
-                 cpu_read_byte(0), cpu_read_byte(1), cpu_read_byte(2), cpu_read_byte(3));
+        cpu.pc = 0x0000;
         
         // Enable interrupts for the game to run
-        regs.iff1 = true;
-        regs.iff2 = true;
+        cpu.iff1 = true;
+        cpu.iff2 = true;
         
         // Mark as executed so we don't try again
         executed_rom = true;
@@ -278,7 +231,6 @@ void cpu_execute_frame(void) {
     }
     
     // Now execute some CPU cycles for this frame
-    const uint32_t CYCLES_PER_FRAME = 50000; // Pacman Z80 runs at 3.072 MHz (50000 cycles/frame)
     uint32_t executed_cycles = 0;
     
     // Execute Z80 instructions until we reach the required number of cycles
@@ -355,12 +307,13 @@ void cpu_execute_frame(void) {
                 0x01, 0x02, 0x03, 0x03, 0x04, 0x00, 
                 0x05, 0x04, 0x06, 0x03, 0x07  // HELLO WORLD
             };
+            size_t hello_world_len = sizeof(hello_world);
             
             int text_y = 8;   // Top section of screen
             int text_x = 9;   // Center horizontally
             
             // Write "HELLO WORLD" in yellow
-            for (int i = 0; i < sizeof(hello_world); i++) {
+            for (size_t i = 0; i < hello_world_len; i++) {
                 int idx = text_y * 32 + text_x + i;
                 vram[idx] = hello_world[i];
                 cram[idx] = 0x05;  // Yellow
@@ -453,16 +406,13 @@ void cpu_execute_frame(void) {
         }
     }
     
-    // Skip CPU execution completely for now
-    // This is a temporary measure until we can properly integrate Z80 emulation
-    cycles_this_frame = CYCLES_PER_FRAME;
+    // Nothing more to do here, CPU execution is complete
     
     // Handle interrupts at the end of the frame
-    if (regs.iff1) {
+    if (cpu.iff1) {
         // Generate interrupt at VBLANK (end of frame)
         cpu_interrupt();
-        handle_interrupt();
     }
     
-    regs.cycles += cycles_this_frame;
+    // End of frame
 }
