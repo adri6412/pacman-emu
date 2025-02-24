@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <SDL2/SDL.h>  // For SDL_Delay
 
 // External declaration of debug_log function
 extern void debug_log(const char *format, ...);
@@ -275,9 +276,20 @@ void cpu_execute_frame(void) {
     // Pacman Z80 runs at 3.072 MHz, so one frame is about 50,000 cycles
     const uint32_t CYCLES_PER_FRAME = 50000;
     
-    // Simulate some basic Z80 execution - not a full emulation
+    // Simulate Z80 execution but with safety guards to prevent infinite loops
     uint32_t cycles_this_frame = 0;
-    while (cycles_this_frame < CYCLES_PER_FRAME) {
+    uint32_t max_instructions = 10000; // Safety limit to prevent infinite loops
+    uint32_t instruction_count = 0;
+    
+    while (cycles_this_frame < CYCLES_PER_FRAME && instruction_count < max_instructions) {
+        // SAFETY CHECK: Ensure PC is within valid ROM/RAM bounds
+        if (regs.pc >= 0x8000) {
+            debug_log("ERROR: PC out of bounds: 0x%04X - resetting to 0", regs.pc);
+            regs.pc = 0;  // Reset to ROM start
+            regs.halted = true;
+            break;
+        }
+        
         if (regs.halted) {
             // If CPU is halted, just count cycles until an interrupt
             cycles_this_frame += 4;
@@ -288,14 +300,24 @@ void cpu_execute_frame(void) {
         uint8_t opcode = cpu_read_byte(regs.pc);
         uint8_t cycles = cycle_counts[opcode];
         
-        // Debug output for first 10 instructions
-        if (regs.cycles < 100) {
+        // Debug output for instructions
+        if (instruction_count < 20 || opcode != 0xFF) {
             debug_log("Executing opcode %02X at PC=%04X", opcode, regs.pc);
         }
         
-        // Handle a couple of basic Z80 instructions
+        // Handle Z80 instructions
         switch (opcode) {
             case 0x00:  // NOP
+                regs.pc++;
+                break;
+                
+            case 0x3E:  // LD A, n
+                regs.a = fetch_byte();
+                regs.pc++;
+                break;
+                
+            case 0x47:  // LD B, A
+                regs.b = regs.a;
                 regs.pc++;
                 break;
                 
@@ -305,7 +327,47 @@ void cpu_execute_frame(void) {
                 break;
                 
             case 0xC3:  // JP nn
-                regs.pc = fetch_word();
+                {
+                    uint16_t jump_addr = fetch_word();
+                    // SAFETY CHECK: Avoid jumping outside ROM
+                    if (jump_addr < 0x8000) {
+                        regs.pc = jump_addr;
+                    } else {
+                        debug_log("ERROR: Jump to invalid address: 0x%04X", jump_addr);
+                        regs.pc = 0;  // Reset to start
+                        regs.halted = true;
+                    }
+                }
+                break;
+                
+            case 0xCD:  // CALL nn
+                {
+                    uint16_t call_addr = fetch_word();
+                    // SAFETY CHECK: Avoid calling outside ROM
+                    if (call_addr < 0x8000) {
+                        push(regs.pc);
+                        regs.pc = call_addr;
+                    } else {
+                        debug_log("ERROR: Call to invalid address: 0x%04X", call_addr);
+                        regs.pc += 2;  // Skip the address bytes
+                    }
+                }
+                break;
+                
+            case 0xC9:  // RET
+                regs.pc = pop();
+                break;
+                
+            case 0xED:  // Extended instructions
+                {
+                    uint8_t extended_op = fetch_byte();
+                    if (extended_op == 0x47) {  // LD I, A
+                        regs.i = regs.a;
+                    } else {
+                        debug_log("Unhandled extended opcode: ED %02X", extended_op);
+                    }
+                    regs.pc++;
+                }
                 break;
                 
             case 0xF3:  // DI
@@ -320,13 +382,32 @@ void cpu_execute_frame(void) {
                 regs.pc++;
                 break;
                 
+            case 0xFF:  // RST 38h
+                // This is a common "filler" in ROM, handle it gracefully
+                push(regs.pc + 1);
+                regs.pc = 0x0038;  // Jump to interrupt vector
+                break;
+                
             default:
-                // For other opcodes, just advance PC
+                // For unimplemented opcodes, just advance PC
+                debug_log("Unimplemented opcode: %02X at PC=%04X", opcode, regs.pc);
                 regs.pc++;
                 break;
         }
         
         cycles_this_frame += cycles;
+        instruction_count++;
+        
+        // If we've executed more than 100 instructions, insert a small delay 
+        // to prevent GUI freezing (this is a temporary fix)
+        if (instruction_count >= 100 && instruction_count % 100 == 0) {
+            // Yield to the OS to avoid freezing the GUI
+            SDL_Delay(1);
+        }
+    }
+    
+    if (instruction_count >= max_instructions) {
+        debug_log("WARNING: Hit instruction limit (%d) - possible infinite loop", max_instructions);
     }
     
     // Handle interrupts at the end of the frame

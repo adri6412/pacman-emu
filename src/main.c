@@ -132,8 +132,15 @@ int main(int argc, char *argv[]) {
     // Main emulation loop
     bool running = true;
     SDL_Event event;
+    uint32_t frame_count = 0;
+    uint32_t last_time = SDL_GetTicks();
+    uint32_t frame_time;
+    
+    debug_log("Starting main emulation loop");
     
     while (running) {
+        uint32_t start_time = SDL_GetTicks();
+        
         // Handle input
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
@@ -149,9 +156,31 @@ int main(int argc, char *argv[]) {
         video_render();
         SDL_RenderPresent(renderer);
         
-        // Cap at ~60fps
-        SDL_Delay(16);
+        // Calculate FPS and adjust timing
+        frame_count++;
+        frame_time = SDL_GetTicks() - start_time;
+        
+        // Every 60 frames (roughly 1 second), show FPS
+        if (frame_count % 60 == 0) {
+            uint32_t current_time = SDL_GetTicks();
+            float elapsed = (current_time - last_time) / 1000.0f;
+            float fps = 60.0f / elapsed;
+            
+            debug_log("FPS: %.2f, Frame time: %dms", fps, frame_time);
+            
+            last_time = current_time;
+        }
+        
+        // Dynamic frame delay to maintain ~60fps
+        if (frame_time < 16) {
+            SDL_Delay(16 - frame_time);
+        } else {
+            // If frame took longer than 16ms, yield briefly to keep UI responsive
+            SDL_Delay(1);
+        }
     }
+    
+    debug_log("Emulation loop ended");
     
     // Cleanup
     video_cleanup();
