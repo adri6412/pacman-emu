@@ -123,8 +123,82 @@ bool memory_init(const char *rom_path) {
     memset(cram, 0, CRAM_SIZE);
     memset(io_ports, 0, sizeof(io_ports));
     
-    // Initialize character set and sprites with placeholder patterns
-    for (int i = 0; i < 256; i++) {
+    // Initialize character set with better patterns for our test ROM
+    // First character (0) is space - all zeros
+    memset(&charset[0], 0, 8);
+    
+    // Character 1 (H) - Simple H pattern
+    charset[1*8+0] = 0xC3; // 11000011
+    charset[1*8+1] = 0xC3; // 11000011
+    charset[1*8+2] = 0xC3; // 11000011
+    charset[1*8+3] = 0xFF; // 11111111
+    charset[1*8+4] = 0xFF; // 11111111
+    charset[1*8+5] = 0xC3; // 11000011
+    charset[1*8+6] = 0xC3; // 11000011
+    charset[1*8+7] = 0xC3; // 11000011
+    
+    // Character 2 (E) - Simple E pattern
+    charset[2*8+0] = 0xFF; // 11111111
+    charset[2*8+1] = 0xFF; // 11111111
+    charset[2*8+2] = 0xC0; // 11000000
+    charset[2*8+3] = 0xFF; // 11111111
+    charset[2*8+4] = 0xFF; // 11111111
+    charset[2*8+5] = 0xC0; // 11000000
+    charset[2*8+6] = 0xFF; // 11111111
+    charset[2*8+7] = 0xFF; // 11111111
+    
+    // Character 3 (L) - Simple L pattern
+    charset[3*8+0] = 0xC0; // 11000000
+    charset[3*8+1] = 0xC0; // 11000000
+    charset[3*8+2] = 0xC0; // 11000000
+    charset[3*8+3] = 0xC0; // 11000000
+    charset[3*8+4] = 0xC0; // 11000000
+    charset[3*8+5] = 0xC0; // 11000000
+    charset[3*8+6] = 0xFF; // 11111111
+    charset[3*8+7] = 0xFF; // 11111111
+    
+    // Character 4 (O) - Simple O pattern
+    charset[4*8+0] = 0x7E; // 01111110
+    charset[4*8+1] = 0xFF; // 11111111
+    charset[4*8+2] = 0xC3; // 11000011
+    charset[4*8+3] = 0xC3; // 11000011
+    charset[4*8+4] = 0xC3; // 11000011
+    charset[4*8+5] = 0xC3; // 11000011
+    charset[4*8+6] = 0xFF; // 11111111
+    charset[4*8+7] = 0x7E; // 01111110
+    
+    // Character 5 (W) - Simple W pattern
+    charset[5*8+0] = 0xC3; // 11000011
+    charset[5*8+1] = 0xC3; // 11000011
+    charset[5*8+2] = 0xC3; // 11000011
+    charset[5*8+3] = 0xC3; // 11000011
+    charset[5*8+4] = 0xDB; // 11011011
+    charset[5*8+5] = 0xFF; // 11111111
+    charset[5*8+6] = 0x66; // 01100110
+    charset[5*8+7] = 0x24; // 00100100
+    
+    // Character 6 (R) - Simple R pattern
+    charset[6*8+0] = 0xFC; // 11111100
+    charset[6*8+1] = 0xFE; // 11111110
+    charset[6*8+2] = 0xC3; // 11000011
+    charset[6*8+3] = 0xFE; // 11111110
+    charset[6*8+4] = 0xFC; // 11111100
+    charset[6*8+5] = 0xDE; // 11011110
+    charset[6*8+6] = 0xCF; // 11001111
+    charset[6*8+7] = 0xC7; // 11000111
+    
+    // Character 7 (D) - Simple D pattern
+    charset[7*8+0] = 0xFC; // 11111100
+    charset[7*8+1] = 0xFE; // 11111110
+    charset[7*8+2] = 0xC3; // 11000011
+    charset[7*8+3] = 0xC3; // 11000011
+    charset[7*8+4] = 0xC3; // 11000011
+    charset[7*8+5] = 0xC3; // 11000011
+    charset[7*8+6] = 0xFE; // 11111110
+    charset[7*8+7] = 0xFC; // 11111100
+    
+    // Fill the rest with simple patterns
+    for (int i = 8; i < 256; i++) {
         for (int j = 0; j < 8; j++) {
             charset[i * 8 + j] = ((i + j) % 8) ? 0x00 : 0xFF;
         }
