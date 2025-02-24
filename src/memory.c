@@ -346,6 +346,10 @@ bool memory_init_mame_set(const char *rom_dir) {
     
     debug_log("===== Loading Pacman ROM set from: %s =====", rom_dir);
     
+    // Debug - make sure all memory is initialized properly
+    debug_log("Memory pointer check: ROM=%p, RAM=%p, VRAM=%p, CRAM=%p, charset=%p, sprites=%p, palette=%p",
+              rom, ram, vram, cram, charset, sprites, palette);
+    
     // Pacman program ROM 1
     path = build_path(rom_dir, pacman_roms.program1);
     debug_log("Checking for ROM: %s", path);
@@ -604,7 +608,7 @@ void memory_reset(void) {
         vram[0xFF7] = 2;       // Green color
     }
     
-    // Set default sprite positions in I/O ports
+    // Set default sprite positions in I/O ports with different positions for each
     io_ports[0x60] = 100;      // Sprite 0 X
     io_ports[0x61] = 100;      // Sprite 0 Y
     io_ports[0x62] = 150;      // Sprite 1 X
@@ -613,6 +617,16 @@ void memory_reset(void) {
     io_ports[0x65] = 150;      // Sprite 2 Y
     io_ports[0x66] = 150;      // Sprite 3 X
     io_ports[0x67] = 150;      // Sprite 3 Y
+    io_ports[0x68] = 80;       // Sprite 4 X
+    io_ports[0x69] = 80;       // Sprite 4 Y
+    io_ports[0x6A] = 170;      // Sprite 5 X
+    io_ports[0x6B] = 80;       // Sprite 5 Y
+    io_ports[0x6C] = 80;       // Sprite 6 X
+    io_ports[0x6D] = 170;      // Sprite 6 Y
+    io_ports[0x6E] = 170;      // Sprite 7 X
+    io_ports[0x6F] = 170;      // Sprite 7 Y
+    
+    debug_log("IO ports for sprite positions initialized: 0x60-0x6F");
 }
 
 // Read a byte from memory (based on MAME pacman_map implementation)

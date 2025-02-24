@@ -257,6 +257,10 @@ static void get_sprite_data(int sprite_num, int *sprite_code, int *sprite_color,
     uint8_t sprite_attr1 = ram[sprites_offset + sprite_num * 2];
     uint8_t sprite_attr2 = ram[sprites_offset + sprite_num * 2 + 1];
     
+    // Debug the sprite data
+    debug_log("Sprite %d data: attr1=0x%02X, attr2=0x%02X", 
+             sprite_num, sprite_attr1, sprite_attr2);
+    
     // From MAME: "sprite number (bits 2-7), Y flip (bit 0), X flip (bit 1)"
     *sprite_code = sprite_attr1 >> 2;
     *flip_y = (sprite_attr1 & 0x01) != 0;
@@ -265,18 +269,23 @@ static void get_sprite_data(int sprite_num, int *sprite_code, int *sprite_color,
     // Color information
     *sprite_color = sprite_attr2 & 0x3F;
     
-    // Sprite coordinates come from I/O ports 0x5060-0x506F (x,y pairs for 8 sprites)
-    // For now use fixed values while we debug the port issues
-    *sprite_x = 100 + (sprite_num * 20);
-    *sprite_y = 100;
+    // Now we'll try to use the actual sprite position data from the I/O ports
+    uint8_t port_offset = 0x60;  // Address 0x5060 in I/O space
+    uint8_t x_pos = io_read_byte(port_offset + sprite_num * 2);
+    uint8_t y_pos = io_read_byte(port_offset + sprite_num * 2 + 1);
     
-    // Original MAME-style code (commented for debugging)
-    // uint8_t port_offset = 0x60;  // Address 0x5060 in I/O space
-    // *sprite_x = io_read_byte(port_offset + sprite_num * 2);
-    // *sprite_y = 272 - io_read_byte(port_offset + sprite_num * 2 + 1); // Y is inverted
+    debug_log("Sprite %d position: x=0x%02X, y=0x%02X from I/O ports", 
+             sprite_num, x_pos, y_pos);
+    
+    // Use the I/O port values
+    *sprite_x = x_pos;
+    *sprite_y = 272 - y_pos; // Y is inverted in Pacman hardware
     
     // Adjust for hardware quirks - MAME subtracts 16 from sprite X position
     *sprite_x -= 16;
+    
+    debug_log("Sprite %d final position: x=%d, y=%d, code=%d, color=%d, flip_x=%d, flip_y=%d",
+             sprite_num, *sprite_x, *sprite_y, *sprite_code, *sprite_color, *flip_x, *flip_y);
 }
 
 // Render the current frame (based on MAME implementation)
@@ -289,6 +298,8 @@ void video_render(void) {
     // Get pointers to video memory
     uint8_t *vram = memory_get_vram();
     uint8_t *cram = memory_get_cram();
+    uint8_t *charset = memory_get_charset();
+    uint32_t *palette = memory_get_palette();
     
     if (!vram || !cram) {
         debug_log("WARNING: Video memory not initialized, rendering test pattern");
@@ -306,6 +317,22 @@ void video_render(void) {
     debug_log("CRAM content sample (first 16 bytes):");
     for (int i = 0; i < 16; i++) {
         debug_log("  CRAM[%d] = 0x%02X", i, cram[i]);
+    }
+    
+    // Debug - dump a small part of the character set to see what's in there
+    if (charset) {
+        debug_log("Character set sample (first 16 bytes of first character):");
+        for (int i = 0; i < 16 && i < 8; i++) {
+            debug_log("  CHARSET[%d] = 0x%02X", i, charset[i]);
+        }
+    }
+    
+    // Debug - dump a small part of the palette to see what's in there
+    if (palette) {
+        debug_log("Palette sample (first 8 colors):");
+        for (int i = 0; i < 8; i++) {
+            debug_log("  PALETTE[%d] = 0x%08X", i, palette[i]);
+        }
     }
     
     // Check if VRAM is all zeros - if so, draw a test pattern instead

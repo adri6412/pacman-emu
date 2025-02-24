@@ -122,7 +122,11 @@ int main(int argc, char *argv[]) {
     }
     
     cpu_init();
-    video_init(renderer, SCALE_FACTOR);
+    // Enable debug mode for video
+    if (video_init(renderer, SCALE_FACTOR)) {
+        video_enable_debug(true);
+        debug_log("Video debug mode enabled");
+    }
     input_init();
     
     // Main emulation loop

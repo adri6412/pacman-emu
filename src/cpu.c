@@ -150,6 +150,7 @@ void cpu_execute_frame(void) {
     // For testing purposes, we'll create some pattern in VRAM directly
     // since we don't have a full CPU emulation yet
     static bool initialized_vram = false;
+    static bool executed_rom = false;
     
     if (!initialized_vram) {
         debug_log("Initializing test pattern in VRAM");
@@ -159,6 +160,10 @@ void cpu_execute_frame(void) {
         uint8_t *cram = memory_get_cram();
         
         if (vram && cram) {
+            // First, clear VRAM and CRAM to all zeros
+            memset(vram, 0, 0x0400);  // Clear 1KB VRAM
+            memset(cram, 0, 0x0400);  // Clear 1KB CRAM
+            
             // Create a simple Pacman-like maze pattern in VRAM
             for (int y = 0; y < 36; y++) {
                 for (int x = 0; x < 28; x++) {
@@ -193,8 +198,23 @@ void cpu_execute_frame(void) {
                 }
             }
             
+            // Add "HELLO WORLD" to the center of the screen
+            const uint8_t hello_world[] = {
+                0x01, 0x02, 0x03, 0x03, 0x04, 0x00, 
+                0x05, 0x04, 0x06, 0x03, 0x07  // HELLO WORLD
+            };
+            
+            int text_y = 15;  // Middle of screen
+            int text_x = 9;   // Center horizontally
+            
+            for (int i = 0; i < sizeof(hello_world); i++) {
+                int idx = text_y * 32 + text_x + i;
+                vram[idx] = hello_world[i];
+                cram[idx] = (i < 5) ? 0x05 : 0x01;  // Yellow for HELLO, Blue for WORLD
+            }
+            
             // Add Pacman and ghosts to specific positions
-            int pacman_pos = 15 * 32 + 14;
+            int pacman_pos = 20 * 32 + 14;
             vram[pacman_pos] = 0x04; // Pacman character
             cram[pacman_pos] = 0x05; // Yellow
             
@@ -231,9 +251,90 @@ void cpu_execute_frame(void) {
         }
     }
     
+    // Try to execute the ROM code if we haven't done so yet
+    if (!executed_rom) {
+        debug_log("Attempting to execute ROM code");
+        
+        // Set PC to beginning of ROM
+        regs.pc = 0x0000;
+        
+        // Print the first few bytes of the ROM to check if it's valid
+        uint8_t *rom_data = memory_get_vram() - 0x4000;  // Crude approximation to get ROM address
+        debug_log("ROM starting bytes: %02X %02X %02X %02X", 
+                 cpu_read_byte(0), cpu_read_byte(1), cpu_read_byte(2), cpu_read_byte(3));
+        
+        // Enable interrupts for the game to run
+        regs.iff1 = true;
+        regs.iff2 = true;
+        
+        // Mark as executed so we don't try again
+        executed_rom = true;
+        debug_log("ROM execution initialized");
+    }
+    
     // Pacman Z80 runs at 3.072 MHz, so one frame is about 50,000 cycles
     const uint32_t CYCLES_PER_FRAME = 50000;
     
-    // Just count cycles for now - we're not executing actual instructions
-    regs.cycles += CYCLES_PER_FRAME;
+    // Simulate some basic Z80 execution - not a full emulation
+    uint32_t cycles_this_frame = 0;
+    while (cycles_this_frame < CYCLES_PER_FRAME) {
+        if (regs.halted) {
+            // If CPU is halted, just count cycles until an interrupt
+            cycles_this_frame += 4;
+            continue;
+        }
+        
+        // Fetch the current opcode
+        uint8_t opcode = cpu_read_byte(regs.pc);
+        uint8_t cycles = cycle_counts[opcode];
+        
+        // Debug output for first 10 instructions
+        if (regs.cycles < 100) {
+            debug_log("Executing opcode %02X at PC=%04X", opcode, regs.pc);
+        }
+        
+        // Handle a couple of basic Z80 instructions
+        switch (opcode) {
+            case 0x00:  // NOP
+                regs.pc++;
+                break;
+                
+            case 0x76:  // HALT
+                regs.halted = true;
+                regs.pc++;
+                break;
+                
+            case 0xC3:  // JP nn
+                regs.pc = fetch_word();
+                break;
+                
+            case 0xF3:  // DI
+                regs.iff1 = false;
+                regs.iff2 = false;
+                regs.pc++;
+                break;
+                
+            case 0xFB:  // EI
+                regs.iff1 = true;
+                regs.iff2 = true;
+                regs.pc++;
+                break;
+                
+            default:
+                // For other opcodes, just advance PC
+                regs.pc++;
+                break;
+        }
+        
+        cycles_this_frame += cycles;
+    }
+    
+    // Handle interrupts at the end of the frame
+    if (regs.iff1) {
+        // Generate interrupt at VBLANK (end of frame)
+        cpu_interrupt();
+        handle_interrupt();
+    }
+    
+    regs.cycles += cycles_this_frame;
 }

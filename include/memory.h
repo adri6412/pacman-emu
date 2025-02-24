@@ -4,6 +4,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+// Debug logging
+void debug_log(const char *format, ...);
+
 // Pacman memory map constants
 #define ROM_SIZE        0x4000  // 16KB ROM (multiple chips)
 #define RAM_SIZE        0x1000  // 4KB RAM
